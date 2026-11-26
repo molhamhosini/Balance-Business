@@ -126,6 +126,26 @@ class Phase3Test extends AccountingTestCase
         $this->assertSame(55000, end($sum)['cells'][6]);
     }
 
+    public function test_dashboard_party_balances_tabs(): void
+    {
+        $item = $this->item();
+        $this->doc('opening', [['item_id' => $item->id, 'quantity' => '100', 'unit_cost' => '20']], ['counter_account_id' => $this->acc('3111')]);
+        $c1 = $this->party('customer');
+        $c2 = $this->party('customer');
+        $this->party('customer'); // no movement: not listed
+        $s = $this->party('supplier');
+        $this->sale($c1, [['item_id' => $item->id, 'quantity' => '10', 'unit_price' => '100']]); // 1,000 + VAT 50
+        $this->sale($c2, [['item_id' => $item->id, 'quantity' => '40', 'unit_price' => '100']]);
+        $this->bill($s, [['item_id' => $item->id, 'quantity' => '10', 'unit_price' => '20']]);
+
+        \Filament\Facades\Filament::setTenant($this->company);
+        $w = new \App\Filament\Admin\Widgets\PartyBalances;
+        $cust = $w->balances('customer');
+        $this->assertSame([420000, 105000], array_column($cust['rows'], 'balance'));
+        $this->assertSame(525000, $cust['total']);
+        $this->assertSame(21000, $w->balances('supplier')['total']); // shown positive: we owe it
+    }
+
     public function test_units_conversion_transfer_count_and_landed_cost(): void
     {
         $item = $this->item(['unit' => 'كغ']);

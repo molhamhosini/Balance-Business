@@ -155,5 +155,10 @@
     "Average price": "Average price",
     "Net amount": "Net amount",
     "No sales in this period.": "No sales in this period.",
-    "Invoice count": "Invoice count"
+    "Invoice count": "Invoice count",
+    "Customer balances": "Customer balances",
+    "Supplier balances": "Supplier balances",
+    "Owed to us": "Owed to us",
+    "We owe": "We owe",
+    "No open balances.": "No open balances."
 }

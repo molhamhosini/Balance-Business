@@ -730,5 +730,9 @@
     "Average price": "متوسط السعر",
     "Net amount": "المبلغ قبل الضريبة",
     "No sales in this period.": "لا توجد مبيعات في هذه الفترة.",
-    "Invoice count": "عدد الفواتير"
+    "Invoice count": "عدد الفواتير",
+    "Customer balances": "أرصدة العملاء",
+    "Supplier balances": "أرصدة الموردين",
+    "Owed to us": "الرصيد (لنا)",
+    "We owe": "الرصيد (علينا)"
 }
