@@ -87,11 +87,13 @@ abstract class InvoiceResource extends Resource
                         }
                     })
                     ->createOptionForm(fn () => [
-                        Forms\Components\TextInput::make('name_ar')->label(__('Name (Arabic)'))->required(),
+                        Forms\Components\TextInput::make('name_ar')->label(__('Name (Arabic)'))->required()->maxLength(200),
+                        Forms\Components\TextInput::make('name_en')->label(__('Name (English)'))->maxLength(200),
                         Forms\Components\TextInput::make('trn')->label(__('TRN'))->length(15)->numeric(),
                         Forms\Components\Select::make('tax_code_id')->label(__('Tax classification'))->options(fn () => Options::taxCodes())->required()
                             ->default(fn () => TaxCode::where('company_id', Options::companyId())->where('code', 'SR')->value('id')),
                         Forms\Components\TextInput::make('phone')->label(__('Phone'))->tel(),
+                        Forms\Components\TextInput::make('email')->label(__('Email'))->email(),
                         Forms\Components\TextInput::make('address')->label(__('Address')),
                         Forms\Components\TextInput::make('payment_terms_days')->label(__('Payment terms (days)'))->numeric()->default(30)->required(),
                     ])
