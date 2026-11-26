@@ -102,7 +102,9 @@ abstract class InvoiceResource extends Resource
                         return $p ? __('Balance').': '.Money::format(abs($p->balance())).($p->trn ? ' · '.__('TRN').' '.$p->trn : '').(Money::toCents($p->credit_limit) > 0 ? ' · '.__('Credit limit').' '.Money::format($p->credit_limit) : '') : null;
                     }),
                 Forms\Components\Select::make('branch_id')->label(__('Branch'))->options(fn () => Options::branches())->default(fn () => array_key_first(Options::branches()))->required(),
-                Forms\Components\TextInput::make('supplier_invoice_number')->label(__('Supplier invoice no.'))->visible(! $sale)->required(fn (Get $get) => $get('kind') === 'purchase')->maxLength(60),
+                Forms\Components\TextInput::make('supplier_invoice_number')->label(__('Supplier invoice no.'))->visible(! $sale)->maxLength(60)
+                    ->placeholder(fn (Get $get) => $get('kind') === 'purchase' ? app(\App\Services\Accounting\SequenceService::class)->peekSupplierInvoice(Options::companyId(), (int) date('Y', strtotime($get('date') ?: 'now'))) : null)
+                    ->helperText(fn (Get $get) => $get('kind') === 'purchase' ? __('Leave empty to number automatically.') : null),
                 Forms\Components\DatePicker::make('date')->label(__('Invoice date'))->default(now())->required()->native(false)->displayFormat('Y-m-d'),
                 Forms\Components\DatePicker::make('due_date')->label(__('Due date'))->native(false)->displayFormat('Y-m-d')->placeholder(__('From payment terms'))->visible(fn (Get $get) => $get('payment') === 'credit'),
                 Forms\Components\Select::make('original_invoice_id')->label(__('Original invoice'))->searchable()

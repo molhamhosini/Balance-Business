@@ -145,5 +145,6 @@
     "الأصناف": "Items",
     "الأصول الثابتة": "Fixed assets",
     "الفواتير المفتوحة الافتتاحية": "Open invoices at go-live",
-    "المخزون الافتتاحي": "Opening stock"
+    "المخزون الافتتاحي": "Opening stock",
+    "Leave empty to number automatically.": "Leave empty to number automatically."
 }

@@ -84,6 +84,19 @@ class InvoicingTest extends AccountingTestCase
         $this->invoice('purchase', $s, [$this->line('5111', '1', '10')], ['supplier_invoice_number' => 'F-77']);
     }
 
+    public function test_purchase_invoice_number_is_automatic_and_sequential_when_left_empty(): void
+    {
+        $s = $this->party('supplier');
+        $a = $this->invoice('purchase', $s, [$this->line('5111', '1', '100')]);
+        $b = $this->invoice('purchase', $s, [$this->line('5111', '1', '200')]);
+        $this->assertSame('INV-2026-10001', $a->supplier_invoice_number);
+        $this->assertSame('INV-2026-10002', $b->supplier_invoice_number);
+        $this->assertSame('INV-2026-10003', app(\App\Services\Accounting\SequenceService::class)->peekSupplierInvoice($this->company->id, 2026));
+        $this->assertSame('INV-2026-10001', $this->invoices()->post($a, $this->accountant)->supplier_invoice_number);
+        // a new year starts its own series
+        $this->assertSame('INV-2027-10001', $this->invoice('purchase', $s, [$this->line('5111', '1', '50')], ['date' => '2027-01-05'])->supplier_invoice_number);
+    }
+
     public function test_reverse_charge_purchase_self_assesses_and_fills_boxes_3_and_10(): void
     {
         $s = $this->party('supplier', ['country' => 'GB']);

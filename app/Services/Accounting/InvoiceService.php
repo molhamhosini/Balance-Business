@@ -86,6 +86,9 @@ class InvoiceService
             if (! $inv->due_date) {
                 $inv->due_date = $inv->date->copy()->addDays($inv->party->payment_terms_days);
             }
+            if ($inv->kind === 'purchase' && blank($inv->supplier_invoice_number)) {
+                $inv->supplier_invoice_number = $this->sequences->nextSupplierInvoice($inv->company_id, (int) $inv->date->format('Y'));
+            }
             $inv->save();
             $inv->lines()->delete();
             $sub = $taxTotal = $base = 0;
@@ -157,7 +160,7 @@ class InvoiceService
         }
         if ($inv->kind === 'purchase') {
             if (blank($inv->supplier_invoice_number)) {
-                throw new AccountingException(__('Enter the supplier invoice number.'));
+                return; // numbered automatically when the draft is saved
             }
             $dup = Invoice::where('company_id', $inv->company_id)->where('party_id', $inv->party_id)->where('kind', 'purchase')
                 ->where('supplier_invoice_number', $inv->supplier_invoice_number)->when($inv->exists, fn ($q) => $q->whereKeyNot($inv->id))->first();
