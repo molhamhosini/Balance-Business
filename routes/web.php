@@ -20,7 +20,7 @@ Route::get('/vouchers/{voucher}/print', function (\App\Models\Voucher $voucher) 
 
 // Link sent to the customer by email / WhatsApp: no login, protected by a signed, expiring URL.
 Route::get('/i/{invoice}', function (\App\Models\Invoice $invoice) {
-    abort_unless($invoice->status === 'posted' && $invoice->isSale(), 404);
+    abort_unless($invoice->isSendable(), 404);
 
     return view('print.invoice', ['inv' => $invoice->load(['company', 'branch', 'party', 'lines.taxCode', 'original'])]);
 })->middleware(['web', 'signed'])->name('invoice.shared');
