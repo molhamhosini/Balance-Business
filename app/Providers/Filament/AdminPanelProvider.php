@@ -43,7 +43,8 @@ class AdminPanelProvider extends PanelProvider
                 'info' => Color::Sky,
             ])
             ->font('IBM Plex Sans Arabic')
-            ->topNavigation()
+            ->sidebarCollapsibleOnDesktop()
+            ->sidebarWidth("17rem")
             ->spa()
             ->databaseNotifications(false)
             ->tenant(Company::class, slugAttribute: 'slug')
