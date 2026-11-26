@@ -105,6 +105,20 @@ class ScreensTest extends AccountingTestCase
         }
     }
 
+    public function test_admin_can_open_role_and_user_edit_forms(): void
+    {
+        $admin = \App\Models\User::factory()->create();
+        $admin->assignRole('system_admin');
+        $admin->companies()->attach($this->company->id);
+        $this->actingAs($admin);
+        \Filament\Facades\Filament::setTenant($this->company);
+        $role = \Spatie\Permission\Models\Role::findByName('data_entry');
+        \Livewire\Livewire::test(\App\Filament\Admin\Resources\RoleResource\Pages\ManageRoles::class)
+            ->mountTableAction('edit', $role)->assertHasNoTableActionErrors()
+            ->assertSee(__(\App\Support\Perm::LABELS[\App\Support\Perm::INVOICES_POST]))
+            ->callMountedTableAction()->assertHasNoTableActionErrors();
+    }
+
     public function test_data_entry_cannot_open_trial_balance(): void
     {
         $this->actingAs($this->entry);
