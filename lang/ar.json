@@ -434,5 +434,16 @@
     "Choose a customer or supplier to see the statement.": "اختر عميلاً أو مورداً لعرض كشف الحساب.",
     "not a tax invoice": "ليست فاتورة ضريبية",
     "Invoice": "فاتورة",
-    "Settlements": "الدفعات"
+    "Settlements": "الدفعات",
+    "Tax classification": "التصنيف الضريبي",
+    "Applied by default to the lines of this party's invoices": "يُطبَّق تلقائياً على بنود فواتير هذا الطرف ويمكن تغييره في البند",
+    "Sequential under the control account": "تسلسلي تلقائي تحت الحساب الإجمالي",
+    "Add customer": "إضافة عميل",
+    "Add supplier": "إضافة مورد",
+    "The code is assigned automatically and sequentially under this account.": "يُمنح الرمز تلقائياً وتسلسلياً تحت هذا الحساب.",
+    "Open card": "فتح البطاقة",
+    "Invoice footer": "تذييل الفاتورة",
+    "Printed at the bottom of every invoice, e.g. bank account / IBAN and payment terms.": "يُطبع أسفل كل فاتورة، مثل الحساب البنكي / IBAN وشروط الدفع.",
+    "End date (12 months)": "تاريخ النهاية (12 شهراً)",
+    "Any date; the year lasts 12 months from it.": "أي تاريخ تختارونه، وتمتد السنة 12 شهراً منه."
 }

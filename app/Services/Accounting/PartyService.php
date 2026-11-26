@@ -20,13 +20,18 @@ class PartyService
         $type = $data['type'];
         $control = $company->systemAccount($type === 'customer' ? 'customers' : 'suppliers')
             ?? throw new AccountingException(__('Bind the customers / suppliers control account in the chart of accounts first.'));
-        $party = Party::create($data + [
-            'company_id' => $company->id,
-            'code' => $data['code'] ?? Party::nextCode($company->id, $type),
-            'account_id' => $control->id,
-        ]);
-        AuditLog::record('created', $party, null, $party->toArray());
+        unset($data['code']); // always automatic and sequential
 
-        return $party;
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($company, $data, $type, $control) {
+            $party = Party::create($data + [
+                'company_id' => $company->id,
+                'code' => Party::nextCode($company->id, $type, $control->code),
+                'account_id' => $control->id,
+                'tax_code_id' => $data['tax_code_id'] ?? $company->taxCodes()->where('code', 'SR')->value('id'),
+            ]);
+            AuditLog::record('created', $party, null, $party->toArray());
+
+            return $party;
+        });
     }
 }

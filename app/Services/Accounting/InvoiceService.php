@@ -78,6 +78,7 @@ class InvoiceService
             $inv->lines()->delete();
             $sub = $taxTotal = 0;
             foreach (array_values($lines) as $i => $l) {
+                $l['tax_code_id'] = array_key_exists('tax_code_id', $l) ? $l['tax_code_id'] : $inv->party->tax_code_id; // party's tax classification by default
                 $code = ! empty($l['tax_code_id']) ? TaxCode::find($l['tax_code_id']) : null;
                 if ($code && $code->type === 'reverse_charge' && $inv->isSale()) {
                     throw new AccountingException(__('Reverse charge applies to purchases only.'));

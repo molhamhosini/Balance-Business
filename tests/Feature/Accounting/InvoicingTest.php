@@ -199,6 +199,21 @@ class InvoicingTest extends AccountingTestCase
         $this->assertSame(0, app(ReportService::class)->vat201($this->company, '2026-11-01', '2026-11-30')['1.1']['vat']);
     }
 
+    public function test_party_codes_are_sequential_under_control_account_and_tax_class_applies(): void
+    {
+        $a = $this->party('customer');
+        $b = $this->party('customer', ['name_ar' => 'ب', 'tax_code_id' => $this->tax('ZR')]);
+        $s = $this->party('supplier');
+        $this->assertSame('1131-0001', $a->code);
+        $this->assertSame('1131-0002', $b->code);
+        $this->assertSame('2111-0001', $s->code);
+        $this->assertSame($this->tax('SR'), $a->tax_code_id);
+        $inv = $this->invoice('sale', $b, [['account_id' => $this->acc('4111'), 'description' => 'x', 'quantity' => 1, 'unit_price' => 100]]);
+        $this->assertSame('0.00', $inv->tax_total, 'zero-rated customer');
+        $b->update(['name_ar' => 'اسم جديد', 'trn' => '100000000000003']); // names and TRNs stay editable
+        $this->assertSame('اسم جديد', $b->fresh()->name_ar);
+    }
+
     public function test_data_entry_cannot_post_invoices(): void
     {
         $inv = $this->invoice('sale', $this->party('customer'), [$this->line('4111', '1', '100')]);

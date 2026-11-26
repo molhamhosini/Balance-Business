@@ -22,6 +22,7 @@ class Party extends Model
 
     public function company(): BelongsTo { return $this->belongsTo(Company::class); }
     public function account(): BelongsTo { return $this->belongsTo(Account::class); }
+    public function taxCode(): BelongsTo { return $this->belongsTo(TaxCode::class); }
     public function invoices(): HasMany { return $this->hasMany(Invoice::class); }
 
     public function getNameAttribute(): string
@@ -45,14 +46,13 @@ class Party extends Model
         return Money::toCents((string) $r->d) - Money::toCents((string) $r->c);
     }
 
-    public static function nextCode(int $companyId, string $type): string
+    /** Sequential code under the control account: 1131-0001, 1131-0002 … (suppliers 2111-0001 …). */
+    public static function nextCode(int $companyId, string $type, string $controlCode): string
     {
-        $prefix = $type === 'customer' ? 'C' : 'S';
-        $n = static::where('company_id', $companyId)->where('type', $type)->count() + 1;
-        do {
-            $code = $prefix.str_pad((string) $n++, 4, '0', STR_PAD_LEFT);
-        } while (static::where('company_id', $companyId)->where('type', $type)->where('code', $code)->exists());
+        $prefix = $controlCode.'-';
+        $last = static::where('company_id', $companyId)->where('type', $type)->where('code', 'like', $prefix.'%')
+            ->lockForUpdate()->pluck('code')->map(fn ($c) => (int) substr($c, strlen($prefix)))->max() ?? 0;
 
-        return $code;
+        return $prefix.str_pad((string) ($last + 1), 4, '0', STR_PAD_LEFT);
     }
 }

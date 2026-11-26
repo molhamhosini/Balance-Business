@@ -29,7 +29,10 @@ class RegisterCompany extends RegisterTenant
             Forms\Components\TextInput::make('trn')->label(__('TRN'))->length(15),
             Forms\Components\Select::make('emirate')->label(__('Emirate'))->options(Branch::EMIRATES)->default('AUH')->required(),
             Forms\Components\Select::make('activity')->label(__('Activity'))->options(['slaughterhouse' => __('Slaughterhouse'), 'restaurant' => __('Restaurant'), 'other' => __('Other')])->required(),
-            Forms\Components\DatePicker::make('fiscal_year_start')->label(__('Fiscal year start'))->default(now()->startOfYear())->required(),
+            Forms\Components\DatePicker::make('fiscal_year_start')->label(__('Fiscal year start'))->required()->live()->native(false)->displayFormat('Y-m-d')
+                ->helperText(__('Any date; the year lasts 12 months from it.')),
+            Forms\Components\Placeholder::make('end_preview')->label(__('End date (12 months)'))
+            ->content(fn (\Filament\Forms\Get $get) => $get('fiscal_year_start') ? \Carbon\CarbonImmutable::parse($get('fiscal_year_start'))->addMonthsNoOverflow(12)->subDay()->format('Y-m-d') : '—'),
             Forms\Components\FileUpload::make('chart')->label(__('Chart of accounts (optional, Excel)'))->disk('local')->directory('imports')
                 ->helperText(__('Leave empty to use the standard chart supplied with the system.')),
         ]);

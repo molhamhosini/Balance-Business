@@ -289,4 +289,11 @@ class AcceptanceTest extends AccountingTestCase
         $this->expectException(AccountingException::class);
         $this->posting()->post($e, $this->accountant);
     }
+
+    public function test_fiscal_year_can_start_any_day_and_lasts_twelve_months(): void
+    {
+        $y = app(PeriodService::class)->createYear($this->company, '2027-04-01');
+        $this->assertSame('2028-03-31', $y->end_date->toDateString());
+        $this->assertSame(12, $y->periods()->count());
+    }
 }

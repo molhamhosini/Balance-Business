@@ -36,7 +36,9 @@ class FiscalYearResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\DatePicker::make('start_date')->label(__('Start date'))->required()->helperText(__('12 monthly periods are created from this date. It does not have to be 1 January.'))->disabledOn('edit'),
+            Forms\Components\DatePicker::make('start_date')->label(__('Start date'))->required()->helperText(__('12 monthly periods are created from this date. It does not have to be 1 January.'))->disabledOn('edit')->live()->native(false)->displayFormat('Y-m-d'),
+            Forms\Components\Placeholder::make('end_preview')->label(__('End date (12 months)'))
+                ->content(fn (\Filament\Forms\Get $get) => $get('start_date') ? \Carbon\CarbonImmutable::parse($get('start_date'))->addMonthsNoOverflow(12)->subDay()->format('Y-m-d') : '—'),
             Forms\Components\TextInput::make('name')->label(__('Name')),
         ]);
     }

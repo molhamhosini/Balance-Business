@@ -22,7 +22,9 @@ td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
 <body>
 <button onclick="window.print()">{{ __('Print') }}</button>
 <header>
-  <div><h1>{{ $c->name_ar }}</h1>@if($c->name_en)<div>{{ $c->name_en }}</div>@endif<div>{{ $c->address }}</div>
+  <div>@if($c->logo_path)<img src="{{ asset('storage/'.$c->logo_path) }}" alt="" style="max-height:70px;max-width:180px;display:block;margin-bottom:6px">@endif
+    <h1>{{ $c->name_ar }}</h1>@if($c->name_en)<div>{{ $c->name_en }}</div>@endif<div>{{ $c->address }}</div>
+    @if($c->phone || $c->email)<div>{{ $c->phone }} @if($c->phone && $c->email) · @endif {{ $c->email }}</div>@endif
     <div><b>TRN / الرقم الضريبي:</b> {{ $c->trn ?? '—' }}</div></div>
   <div><h2>{{ $title }}<br><small>{{ $titleEn }}</small></h2>
     @if($inv->status === 'cancelled')<div class="stamp">{{ __('Cancelled') }}</div>@elseif($inv->status === 'draft')<div class="stamp">{{ __('Draft') }} — {{ __('not a tax invoice') }}</div>@endif</div>
@@ -37,6 +39,7 @@ td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
 <div class="meta">
   <div class="box"><h3>{{ $inv->isSale() ? 'العميل / Bill to' : 'المورد / Supplier' }}</h3>
     <div><b>{{ $p->name_ar }}</b> @if($p->name_en) — {{ $p->name_en }} @endif</div><div>{{ $p->address }}</div>
+    @if($p->phone)<div>{{ $p->phone }}</div>@endif
     <div><b>TRN:</b> {{ $p->trn ?? '—' }}</div></div>
   <div class="box"><h3>الفرع / Branch</h3><div>{{ $inv->branch->name }}</div>
     <div>{{ $inv->payment === 'cash' ? 'نقدي / Cash' : 'آجل / Credit' }}</div>@if($inv->description)<div>{{ $inv->description }}</div>@endif</div>
@@ -58,5 +61,6 @@ td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}
   <tr><th>الإجمالي شامل الضريبة / Total ({{ $inv->currency }})</th><td class="n"><b>{{ $m($inv->total) }}</b></td></tr>
 </table>
 @if($inv->lines->contains(fn ($l) => $l->taxCode?->type === 'reverse_charge'))<p><b>Reverse charge applies — الاحتساب العكسي مطبق</b></p>@endif
+@if($c->invoice_footer)<div style="margin-top:22px;border-top:1px solid #cbd5e1;padding-top:10px;white-space:pre-line">{{ $c->invoice_footer }}</div>@endif
 <div class="foot">UUID: {{ $inv->uuid }}</div>
 </body></html>

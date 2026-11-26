@@ -49,9 +49,12 @@ abstract class PartyResource extends Resource
         return $form->schema([
             Forms\Components\Section::make()->columns(3)->schema([
                 Forms\Components\TextInput::make('name_ar')->label(__('Name (Arabic)'))->required()->maxLength(200)->columnSpan(2),
-                Forms\Components\TextInput::make('code')->label(__('Code'))->placeholder(__('Automatic'))->maxLength(20)
-                    ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->where('company_id', Options::companyId())->where('type', static::partyType())),
+                Forms\Components\TextInput::make('code')->label(__('Code'))->placeholder(__('Automatic'))->disabled()->dehydrated(false)
+                    ->helperText(__('Sequential under the control account')),
                 Forms\Components\TextInput::make('name_en')->label(__('Name (English)'))->maxLength(200)->columnSpan(2),
+                Forms\Components\Select::make('tax_code_id')->label(__('Tax classification'))->options(fn () => Options::taxCodes())->required()
+                    ->default(fn () => \App\Models\TaxCode::where('company_id', Options::companyId())->where('code', 'SR')->value('id'))
+                    ->helperText(__('Applied by default to the lines of this party\'s invoices')),
                 Forms\Components\TextInput::make('trn')->label(__('TRN'))->maxLength(15)->minLength(15)->numeric()->helperText(__('15 digits, required on tax invoices for registered buyers')),
                 Forms\Components\TextInput::make('phone')->label(__('Phone'))->tel(),
                 Forms\Components\TextInput::make('email')->label(__('Email'))->email(),
@@ -87,6 +90,7 @@ abstract class PartyResource extends Resource
             Infolists\Components\Section::make(fn (Party $r) => $r->label)->columns(4)->schema([
                 Infolists\Components\TextEntry::make('name_en')->label(__('Name (English)'))->placeholder('—'),
                 Infolists\Components\TextEntry::make('trn')->label(__('TRN'))->placeholder('—'),
+                Infolists\Components\TextEntry::make('taxCode.label')->label(__('Tax classification'))->placeholder('—'),
                 Infolists\Components\TextEntry::make('phone')->label(__('Phone'))->placeholder('—'),
                 Infolists\Components\TextEntry::make('email')->label(__('Email'))->placeholder('—'),
                 Infolists\Components\TextEntry::make('address')->label(__('Address'))->placeholder('—')->columnSpan(2),
@@ -111,6 +115,7 @@ abstract class PartyResource extends Resource
                 Tables\Columns\TextColumn::make('code')->label(__('Code'))->searchable()->sortable()->weight('bold'),
                 Tables\Columns\TextColumn::make('name_ar')->label(__('Name'))->searchable(['name_ar', 'name_en'])->description(fn (Party $record) => $record->name_en),
                 Tables\Columns\TextColumn::make('trn')->label(__('TRN'))->searchable()->toggleable()->placeholder('—'),
+                Tables\Columns\TextColumn::make('taxCode.code')->label(__('Tax'))->badge()->color('gray')->toggleable(),
                 Tables\Columns\TextColumn::make('phone')->label(__('Phone'))->toggleable()->placeholder('—'),
                 Tables\Columns\TextColumn::make('payment_terms_days')->label(__('Terms'))->suffix(' '.__('days'))->toggleable(),
                 Tables\Columns\TextColumn::make('balance')->label(__('Balance'))->alignEnd()

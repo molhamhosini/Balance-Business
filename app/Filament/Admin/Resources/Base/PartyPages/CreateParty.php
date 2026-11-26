@@ -16,10 +16,6 @@ abstract class CreateParty extends CreateRecord
     {
         try {
             $data['type'] = static::getResource()::partyType();
-            $data['code'] = $data['code'] ?: null;
-            if ($data['code'] === null) {
-                unset($data['code']);
-            }
 
             return app(PartyService::class)->create(Filament::getTenant(), $data, auth()->user());
         } catch (AccountingException $e) {

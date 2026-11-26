@@ -78,9 +78,21 @@ abstract class InvoiceResource extends Resource
                 Forms\Components\Select::make('party_id')->label($sale ? __('Customer') : __('Supplier'))->required()->searchable()->columnSpan(2)
                     ->options(fn () => Party::where('company_id', Options::companyId())->where('type', $sale ? 'customer' : 'supplier')->where('is_active', true)->orderBy('code')->get()->mapWithKeys(fn ($p) => [$p->id => $p->label])->all())
                     ->default(fn () => request('party'))->live()
+                    ->afterStateUpdated(function ($state, Get $get, Forms\Set $set) {
+                        $tax = $state ? Party::whereKey($state)->value('tax_code_id') : null;
+                        if ($tax) {
+                            foreach (array_keys($get('lines') ?? []) as $k) {
+                                $set("lines.$k.tax_code_id", $tax);
+                            }
+                        }
+                    })
                     ->createOptionForm(fn () => [
                         Forms\Components\TextInput::make('name_ar')->label(__('Name (Arabic)'))->required(),
                         Forms\Components\TextInput::make('trn')->label(__('TRN'))->length(15)->numeric(),
+                        Forms\Components\Select::make('tax_code_id')->label(__('Tax classification'))->options(fn () => Options::taxCodes())->required()
+                            ->default(fn () => TaxCode::where('company_id', Options::companyId())->where('code', 'SR')->value('id')),
+                        Forms\Components\TextInput::make('phone')->label(__('Phone'))->tel(),
+                        Forms\Components\TextInput::make('address')->label(__('Address')),
                         Forms\Components\TextInput::make('payment_terms_days')->label(__('Payment terms (days)'))->numeric()->default(30)->required(),
                     ])
                     ->createOptionUsing(fn (array $data) => app(\App\Services\Accounting\PartyService::class)->create(\Filament\Facades\Filament::getTenant(), $data + ['type' => $sale ? 'customer' : 'supplier'], auth()->user())->id)
@@ -110,7 +122,8 @@ abstract class InvoiceResource extends Resource
                         Forms\Components\TextInput::make('unit')->label(__('Unit'))->placeholder(__('kg'))->columnSpan(1),
                         Forms\Components\TextInput::make('unit_price')->label(__('Unit price'))->numeric()->required()->columnSpan(2),
                         Forms\Components\Select::make('tax_code_id')->label(__('Tax'))->options(fn () => Options::taxCodes())->columnSpan(2)
-                            ->default(fn () => TaxCode::where('company_id', Options::companyId())->where('code', 'SR')->value('id')),
+                            ->default(fn (Get $get) => ($get('../../party_id') ? Party::whereKey($get('../../party_id'))->value('tax_code_id') : null)
+                                ?? TaxCode::where('company_id', Options::companyId())->where('code', 'SR')->value('id')),
                     ]),
                 Forms\Components\Placeholder::make('totals')->hiddenLabel()->content(fn (Get $get) => static::totalsPreview($get('lines') ?? [])),
             ]),
