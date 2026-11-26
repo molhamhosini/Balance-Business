@@ -30,7 +30,7 @@ class Invoice extends Model
 
     protected $casts = [
         'date' => 'date', 'due_date' => 'date', 'posted_at' => 'datetime', 'einvoice_at' => 'datetime',
-        'subtotal' => 'decimal:2', 'tax_total' => 'decimal:2', 'total' => 'decimal:2',
+        'subtotal' => 'decimal:2', 'tax_total' => 'decimal:2', 'total' => 'decimal:2', 'fx_rate' => 'decimal:6', 'base_total' => 'decimal:2',
     ];
 
     protected static function booted(): void
@@ -82,13 +82,19 @@ class Invoice extends Model
         return $this->creditAllocations()->get()->sum(fn ($a) => Money::toCents($a->amount));
     }
 
+    /** Total in AED (what the party owes in the books); equals total for AED documents. */
+    public function baseTotalCents(): int
+    {
+        return ($this->currency ?? 'AED') === 'AED' || Money::toCents($this->base_total) === 0 ? Money::toCents($this->total) : Money::toCents($this->base_total);
+    }
+
     public function openCents(): int
     {
         if ($this->status !== 'posted' || $this->payment === 'cash') {
             return 0;
         }
 
-        return Money::toCents($this->total) - ($this->isReturn() ? $this->appliedCents() : $this->settledCents());
+        return $this->baseTotalCents() - ($this->isReturn() ? $this->appliedCents() : $this->settledCents());
     }
 
     public function paymentState(): string
@@ -101,6 +107,6 @@ class Invoice extends Model
         }
         $open = $this->openCents();
 
-        return $open === 0 ? 'paid' : ($open < Money::toCents($this->total) ? 'partial' : 'not_paid');
+        return $open <= 0 ? 'paid' : ($open < $this->baseTotalCents() ? 'partial' : 'not_paid');
     }
 }

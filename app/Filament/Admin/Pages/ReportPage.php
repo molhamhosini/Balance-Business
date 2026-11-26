@@ -26,6 +26,10 @@ abstract class ReportPage extends Page implements HasForms
     #[Url] public ?string $from = null;
     #[Url] public ?string $to = null;
     #[Url] public ?string $branch = null;
+    #[Url] public ?string $cc = null;
+
+    /** Show the cost center filter (reports built on journal lines). */
+    protected static bool $costCenterFilter = true;
 
     protected static ?string $reportPermission = Perm::REPORTS_VIEW;
 
@@ -45,7 +49,7 @@ abstract class ReportPage extends Page implements HasForms
 
     protected function formState(): array
     {
-        return ['from' => $this->from, 'to' => $this->to, 'branch' => $this->branch];
+        return ['from' => $this->from, 'to' => $this->to, 'branch' => $this->branch, 'cc' => $this->cc];
     }
 
     protected function filterFields(): array
@@ -54,7 +58,19 @@ abstract class ReportPage extends Page implements HasForms
             Forms\Components\DatePicker::make('from')->label(__('From'))->live()->native(false)->displayFormat('Y-m-d'),
             Forms\Components\DatePicker::make('to')->label(__('To'))->live()->native(false)->displayFormat('Y-m-d'),
             Forms\Components\Select::make('branch')->label(__('Branch'))->options(fn () => Options::branches())->placeholder(__('All branches'))->live(),
+            ...(static::$costCenterFilter ? [$this->costCenterField()] : []),
         ];
+    }
+
+    protected function costCenterField(): Forms\Components\Select
+    {
+        return Forms\Components\Select::make('cc')->label(__('Cost center'))->options(fn () => Options::costCenters())->placeholder(__('All cost centers'))->searchable()->live();
+    }
+
+    /** Report service with the page's cost center filter applied. */
+    protected function reports(): \App\Services\Accounting\ReportService
+    {
+        return app(\App\Services\Accounting\ReportService::class)->forCostCenter(static::$costCenterFilter && $this->cc ? (int) $this->cc : null);
     }
 
     public function form(Form $form): Form
@@ -94,7 +110,8 @@ abstract class ReportPage extends Page implements HasForms
         $sheet = $book->getActiveSheet();
         $sheet->setRightToLeft(app()->getLocale() === 'ar');
         $sheet->setTitle(mb_substr(strip_tags((string) $this->getTitle()), 0, 30));
-        $sheet->fromArray([[$this->company()->name.' — '.$this->getTitle()], [__('From').' '.$this->from.' '.__('To').' '.$this->to], $headers], null, 'A1');
+        $sub = __('From').' '.$this->from.' '.__('To').' '.$this->to.($this->cc ? ' · '.__('Cost center').': '.\App\Models\CostCenter::find($this->cc)?->label : '');
+        $sheet->fromArray([[$this->company()->name.' — '.$this->getTitle()], [$sub], $headers], null, 'A1');
         $r = 4;
         foreach ($rows as $row) {
             $sheet->fromArray(array_map(fn ($v) => is_int($v) ? $v / 100 : $v, $row), null, 'A'.$r++);

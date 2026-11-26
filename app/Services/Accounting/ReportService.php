@@ -15,13 +15,24 @@ use Illuminate\Support\Facades\DB;
  */
 class ReportService
 {
+    /** Cost center filter for every report (the center and its children); null = all. */
+    public ?array $costCenterIds = null;
+
+    public function forCostCenter(?int $id): static
+    {
+        $this->costCenterIds = $id ? \App\Models\CostCenter::findOrFail($id)->descendantIds() : null;
+
+        return $this;
+    }
+
     private function base(Company $company, ?int $branchId)
     {
         return DB::table('journal_lines as l')
             ->join('journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
             ->where('e.company_id', $company->id)
             ->whereIn('e.status', ['posted', 'reversed'])
-            ->when($branchId, fn ($q) => $q->where('e.branch_id', $branchId));
+            ->when($branchId, fn ($q) => $q->where('e.branch_id', $branchId))
+            ->when($this->costCenterIds, fn ($q) => $q->whereIn('l.cost_center_id', $this->costCenterIds));
     }
 
     /** Per leaf account: [account_id => ['d'=>int,'c'=>int]] between dates (inclusive; null = open). */
@@ -348,6 +359,230 @@ class ReportService
         }
 
         return ['rows' => array_values($parties), 'totals' => $totals];
+    }
+
+    /** Profitability per cost center: revenue, cost of sales, expenses and result (requirements §7). */
+    public function costCenterProfit(Company $company, string $from, string $to, ?int $branchId = null): array
+    {
+        $rows = DB::table('journal_lines as l')->join('journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+            ->join('accounts as a', 'a.id', '=', 'l.account_id')
+            ->where('e.company_id', $company->id)->whereIn('e.status', ['posted', 'reversed'])->where('e.type', '!=', 'closing')
+            ->whereBetween('e.date', [$from, $to])->when($branchId, fn ($q) => $q->where('e.branch_id', $branchId))
+            ->whereIn('a.class', ['revenue', 'cogs', 'expense'])
+            ->groupBy('l.cost_center_id', 'a.class')->selectRaw('l.cost_center_id cc, a.class, SUM(l.debit) d, SUM(l.credit) c')->get();
+        $centers = \App\Models\CostCenter::where('company_id', $company->id)->orderBy('code')->get()->keyBy('id');
+        $out = [];
+        $blank = ['revenue' => 0, 'cogs' => 0, 'expense' => 0];
+        foreach ($rows as $r) {
+            $key = $r->cc ?? 0;
+            $out[$key] ??= ['center' => $centers[$r->cc] ?? null] + $blank;
+            $d = Money::toCents((string) $r->d);
+            $c = Money::toCents((string) $r->c);
+            $out[$key][$r->class] += $r->class === 'revenue' ? $c - $d : $d - $c;
+        }
+        $tot = $blank;
+        foreach ($out as &$o) {
+            $o['gross'] = $o['revenue'] - $o['cogs'];
+            $o['net'] = $o['gross'] - $o['expense'];
+            $o['margin'] = $o['revenue'] ? round($o['net'] * 100 / $o['revenue'], 1) : null;
+            foreach ($blank as $k => $_) {
+                $tot[$k] += $o[$k];
+            }
+        }
+        unset($o);
+        uksort($out, fn ($a, $b) => $a === 0 ? 1 : ($b === 0 ? -1 : strcmp($centers[$a]->code, $centers[$b]->code)));
+        $tot['gross'] = $tot['revenue'] - $tot['cogs'];
+        $tot['net'] = $tot['gross'] - $tot['expense'];
+
+        return ['rows' => array_values($out), 'totals' => $tot];
+    }
+
+    /**
+     * Cash flow statement, indirect method. Net income, then the change in every non-cash balance
+     * sheet account: current items (and accumulated depreciation) are operating, other non-current
+     * assets investing, non-current liabilities and equity financing. Year-closing entries are ignored.
+     */
+    public function cashFlow(Company $company, string $from, string $to, ?int $branchId = null): array
+    {
+        $accounts = Account::where('company_id', $company->id)->get()->keyBy('id');
+        $accum = \App\Models\AssetCategory::where('company_id', $company->id)->pluck('accumulated_account_id')->all();
+        $period = $this->sums($company, $from, $to, $branchId, excludeClosing: true);
+        $opening = $this->sums($company, null, $this->dayBefore($from), $branchId);
+        $closingAll = $this->sums($company, null, $to, $branchId);
+        $netIncome = 0;
+        $sections = ['operating' => [], 'investing' => [], 'financing' => []];
+        $depreciation = 0;
+        $cashOpen = $cashClose = 0;
+        foreach ($accounts as $id => $a) {
+            if (! $a->is_postable) {
+                continue;
+            }
+            if ($a->is_cash || $a->is_bank) {
+                $cashOpen += ($opening[$id]['d'] ?? 0) - ($opening[$id]['c'] ?? 0);
+                $cashClose += ($closingAll[$id]['d'] ?? 0) - ($closingAll[$id]['c'] ?? 0);
+
+                continue;
+            }
+            $mv = ($period[$id]['d'] ?? 0) - ($period[$id]['c'] ?? 0);
+            if ($mv === 0) {
+                continue;
+            }
+            if ($a->statement === 'income_statement' || in_array($a->class, ['revenue', 'cogs', 'expense'], true)) {
+                $netIncome -= $mv;
+
+                continue;
+            }
+            if (in_array($id, $accum, true)) {
+                $depreciation -= $mv;
+
+                continue;
+            }
+            $code = $a->code;
+            $section = match (true) {
+                str_starts_with($code, '11'), str_starts_with($code, '21') => 'operating',
+                str_starts_with($code, '1') => 'investing',
+                default => 'financing',
+            };
+            $head = $this->ancestorAtLevel($a, $accounts, 3);
+            $sections[$section][$head->code] ??= ['label' => $head->code.' '.$head->name, 'amount' => 0];
+            $sections[$section][$head->code]['amount'] -= $mv; // an increase in an asset uses cash
+        }
+        foreach ($sections as &$sec) {
+            ksort($sec);
+            $sec = array_values(array_filter($sec, fn ($r) => $r['amount'] !== 0));
+        }
+        unset($sec);
+        $sum = fn ($k) => array_sum(array_column($sections[$k], 'amount'));
+        $operating = $netIncome + $depreciation + $sum('operating');
+        $investing = $sum('investing');
+        $financing = $sum('financing');
+
+        return [
+            'net_income' => $netIncome, 'depreciation' => $depreciation, 'sections' => $sections,
+            'operating' => $operating, 'investing' => $investing, 'financing' => $financing,
+            'net_change' => $operating + $investing + $financing,
+            'cash_open' => $cashOpen, 'cash_close' => $cashClose,
+            'check' => $cashClose - $cashOpen - ($operating + $investing + $financing), // 0 when complete
+        ];
+    }
+
+    /** Cash and bank movement: per account opening, receipts, payments, closing, plus each day's totals. */
+    public function cashMovement(Company $company, string $from, string $to, ?int $branchId = null): array
+    {
+        $accs = Account::where('company_id', $company->id)->where('is_postable', true)->where(fn ($q) => $q->where('is_cash', true)->orWhere('is_bank', true))->orderBy('code')->get();
+        $open = $this->sums($company, null, $this->dayBefore($from), $branchId);
+        $mv = $this->sums($company, $from, $to, $branchId);
+        $days = $this->base($company, $branchId)->whereIn('l.account_id', $accs->pluck('id'))->whereBetween('e.date', [$from, $to])
+            ->groupBy('e.date', 'l.account_id')->orderBy('e.date')->selectRaw('e.date, l.account_id, SUM(l.debit) d, SUM(l.credit) c')->get();
+        $rows = [];
+        $tot = ['opening' => 0, 'in' => 0, 'out' => 0, 'closing' => 0];
+        foreach ($accs as $a) {
+            $o = ($open[$a->id]['d'] ?? 0) - ($open[$a->id]['c'] ?? 0);
+            $in = $mv[$a->id]['d'] ?? 0;
+            $out = $mv[$a->id]['c'] ?? 0;
+            if ($o === 0 && $in === 0 && $out === 0) {
+                continue;
+            }
+            $running = $o;
+            $daily = [];
+            foreach ($days->where('account_id', $a->id) as $d) {
+                $di = Money::toCents((string) $d->d);
+                $do = Money::toCents((string) $d->c);
+                $running += $di - $do;
+                $daily[] = ['date' => (string) $d->date, 'in' => $di, 'out' => $do, 'balance' => $running];
+            }
+            $rows[] = ['account' => $a, 'opening' => $o, 'in' => $in, 'out' => $out, 'closing' => $o + $in - $out, 'days' => $daily];
+            $tot['opening'] += $o;
+            $tot['in'] += $in;
+            $tot['out'] += $out;
+            $tot['closing'] += $o + $in - $out;
+        }
+
+        return ['rows' => $rows, 'totals' => $tot];
+    }
+
+    /** Stock quantities and values per item (and warehouse) at a date, from the stock ledger. */
+    public function stockBalances(Company $company, string $asOf, ?int $warehouseId = null): array
+    {
+        $q = DB::table('stock_moves as m')->join('items as i', 'i.id', '=', 'm.item_id')
+            ->where('m.company_id', $company->id)->where('m.date', '<=', $asOf)
+            ->when($warehouseId, fn ($q) => $q->where('m.warehouse_id', $warehouseId))
+            ->groupBy('m.item_id', 'i.code', 'i.name_ar', 'i.unit')->orderBy('i.code')
+            ->selectRaw('m.item_id, i.code, i.name_ar, i.unit, SUM(m.quantity) qty, SUM(m.value) value, MAX(m.date) last_move');
+        $rows = [];
+        $total = 0;
+        foreach ($q->get() as $r) {
+            $milli = InventoryService::milli((string) $r->qty);
+            $value = Money::toCents((string) $r->value);
+            if ($warehouseId) { // value of a single warehouse at the company average
+                $item = \App\Models\Item::find($r->item_id);
+                $value = (int) round($milli * (float) $item->avg_cost / 10);
+            }
+            if ($milli === 0 && $value === 0) {
+                continue;
+            }
+            $rows[] = ['item_id' => $r->item_id, 'code' => $r->code, 'name' => $r->name_ar, 'unit' => $r->unit, 'qty' => $milli, 'value' => $value, 'avg' => $milli ? $value * 10 / $milli : 0, 'last_move' => $r->last_move];
+            $total += $value;
+        }
+
+        return ['rows' => $rows, 'total' => $total];
+    }
+
+    /** Item card: every move with running quantity and average cost. */
+    public function itemCard(\App\Models\Item $item, string $from, string $to, ?int $warehouseId = null): array
+    {
+        $base = \App\Models\StockMove::where('item_id', $item->id)->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId));
+        $openQty = InventoryService::milli((string) (clone $base)->where('date', '<', $from)->sum('quantity'));
+        $openVal = Money::toCents((string) (clone $base)->where('date', '<', $from)->sum('value'));
+        $qty = $openQty;
+        $val = $openVal;
+        $rows = [];
+        foreach ((clone $base)->with(['warehouse', 'journalEntry'])->whereBetween('date', [$from, $to])->orderBy('date')->orderBy('id')->get() as $m) {
+            $q = InventoryService::milli($m->quantity);
+            $v = Money::toCents($m->value);
+            $qty += $q;
+            $val += $v;
+            $rows[] = ['date' => $m->date->toDateString(), 'description' => $m->description, 'warehouse' => $m->warehouse->name, 'entry' => $m->journalEntry,
+                'in' => max(0, $q), 'out' => max(0, -$q), 'unit_cost' => (float) $m->unit_cost, 'value' => $v, 'qty' => $qty, 'balance_value' => $val, 'avg' => (float) $m->avg_cost_after];
+        }
+
+        return ['open_qty' => $openQty, 'open_value' => $openVal, 'rows' => $rows, 'qty' => $qty, 'value' => $val];
+    }
+
+    /** Items in stock with no sale or issue for $days days. */
+    public function slowMoving(Company $company, string $asOf, int $days = 60): array
+    {
+        $cut = \Illuminate\Support\Carbon::parse($asOf)->subDays($days)->toDateString();
+        $bal = collect($this->stockBalances($company, $asOf)['rows'])->filter(fn ($r) => $r['qty'] > 0);
+        $lastOut = DB::table('stock_moves')->where('company_id', $company->id)->where('quantity', '<', 0)->where('date', '<=', $asOf)
+            ->groupBy('item_id')->selectRaw('item_id, MAX(date) d')->pluck('d', 'item_id');
+
+        return $bal->map(fn ($r) => $r + ['last_out' => $lastOut[$r['item_id']] ?? null])
+            ->filter(fn ($r) => ! $r['last_out'] || $r['last_out'] < $cut)
+            ->map(fn ($r) => $r + ['idle_days' => $r['last_out'] ? \Illuminate\Support\Carbon::parse($r['last_out'])->diffInDays(\Illuminate\Support\Carbon::parse($asOf)) : null])
+            ->values()->all();
+    }
+
+    /** Fixed asset register: cost, accumulated depreciation, net book value at a date. */
+    public function assetRegister(Company $company, string $asOf, ?int $branchId = null): array
+    {
+        $rows = [];
+        $tot = ['cost' => 0, 'accumulated' => 0, 'nbv' => 0, 'period' => 0];
+        $yearStart = $this->fiscalYearStart($company, $asOf) ?? substr($asOf, 0, 4).'-01-01';
+        foreach (\App\Models\Asset::with('category')->where('company_id', $company->id)->where('purchase_date', '<=', $asOf)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->orderBy('code')->get() as $a) {
+            $disposed = $a->status === 'disposed' && $a->disposal_date && $a->disposal_date->lte(\Illuminate\Support\Carbon::parse($asOf));
+            $cost = $disposed ? 0 : Money::toCents($a->cost);
+            $acc = $disposed ? 0 : $a->accumulatedCents($asOf);
+            $ytd = $a->depreciations()->whereBetween('period_end', [$yearStart, $asOf])->get()->sum(fn ($d) => Money::toCents($d->amount));
+            $rows[] = ['asset' => $a, 'cost' => $cost, 'accumulated' => $acc, 'nbv' => $cost - $acc, 'period' => $ytd, 'disposed' => $disposed];
+            $tot['cost'] += $cost;
+            $tot['accumulated'] += $acc;
+            $tot['nbv'] += $cost - $acc;
+            $tot['period'] += $ytd;
+        }
+
+        return ['rows' => $rows, 'totals' => $tot];
     }
 
     private function ancestorAtLevel(Account $a, Collection $accounts, int $level): Account

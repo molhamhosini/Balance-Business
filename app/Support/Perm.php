@@ -30,6 +30,12 @@ final class Perm
     public const INVOICES_CANCEL = 'invoices.cancel';
     public const CREDIT_LIMIT_OVERRIDE = 'invoices.credit_limit_override';
     public const EINVOICE_MANAGE = 'einvoice.manage';
+    public const BANKING_MANAGE = 'banking.manage';
+    public const INVENTORY_VIEW = 'inventory.view';
+    public const INVENTORY_MANAGE = 'inventory.manage';
+    public const INVENTORY_POST = 'inventory.post';
+    public const ASSETS_MANAGE = 'assets.manage';
+    public const ASSETS_DEPRECIATE = 'assets.depreciate';
 
     public const LABELS = [
         self::ENTRIES_VIEW => 'عرض القيود',
@@ -57,13 +63,19 @@ final class Perm
         self::INVOICES_CANCEL => 'إلغاء الفواتير',
         self::CREDIT_LIMIT_OVERRIDE => 'تجاوز حد الائتمان',
         self::EINVOICE_MANAGE => 'الفوترة الإلكترونية',
+        self::BANKING_MANAGE => 'البنوك والشيكات والتسويات',
+        self::INVENTORY_VIEW => 'عرض المخزون',
+        self::INVENTORY_MANAGE => 'إدارة الأصناف ومستندات المخزون',
+        self::INVENTORY_POST => 'ترحيل مستندات المخزون',
+        self::ASSETS_MANAGE => 'إدارة الأصول الثابتة',
+        self::ASSETS_DEPRECIATE => 'تشغيل الإهلاك واستبعاد الأصول',
     ];
 
     public const ROLES = [
-        'data_entry' => ['label' => 'مدخل بيانات', 'perms' => [self::PARTIES_MANAGE, self::INVOICES_VIEW, self::INVOICES_DRAFT, self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::REPORTS_LIMITED]],
-        'accountant' => ['label' => 'محاسب', 'perms' => [self::PARTIES_MANAGE, self::INVOICES_VIEW, self::INVOICES_DRAFT, self::INVOICES_POST, self::EINVOICE_MANAGE, self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::ENTRIES_POST, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::VOUCHERS_POST, self::ACCOUNTS_MANAGE, self::REPORTS_VIEW, self::REPORTS_LIMITED]],
-        'chief_accountant' => ['label' => 'رئيس الحسابات', 'perms' => [self::PARTIES_MANAGE, self::INVOICES_VIEW, self::INVOICES_DRAFT, self::INVOICES_POST, self::INVOICES_CANCEL, self::CREDIT_LIMIT_OVERRIDE, self::EINVOICE_MANAGE, self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::ENTRIES_POST, self::ENTRIES_REVERSE, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::VOUCHERS_POST, self::VOUCHERS_CANCEL, self::VOUCHERS_OVER_LIMIT, self::ACCOUNTS_MANAGE, self::PERIODS_CLOSE, self::PERIODS_REOPEN, self::YEAR_CLOSE, self::REPORTS_VIEW, self::REPORTS_LIMITED, self::AUDIT_VIEW]],
-        'management' => ['label' => 'الإدارة', 'perms' => [self::INVOICES_VIEW, self::ENTRIES_VIEW, self::VOUCHERS_VIEW, self::REPORTS_VIEW, self::REPORTS_LIMITED, self::AUDIT_VIEW]],
+        'data_entry' => ['label' => 'مدخل بيانات', 'perms' => [self::INVENTORY_VIEW, self::INVENTORY_MANAGE, self::PARTIES_MANAGE, self::INVOICES_VIEW, self::INVOICES_DRAFT, self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::REPORTS_LIMITED]],
+        'accountant' => ['label' => 'محاسب', 'perms' => [self::BANKING_MANAGE, self::INVENTORY_VIEW, self::INVENTORY_MANAGE, self::INVENTORY_POST, self::ASSETS_MANAGE, self::PARTIES_MANAGE, self::INVOICES_VIEW, self::INVOICES_DRAFT, self::INVOICES_POST, self::EINVOICE_MANAGE, self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::ENTRIES_POST, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::VOUCHERS_POST, self::ACCOUNTS_MANAGE, self::REPORTS_VIEW, self::REPORTS_LIMITED]],
+        'chief_accountant' => ['label' => 'رئيس الحسابات', 'perms' => [self::BANKING_MANAGE, self::INVENTORY_VIEW, self::INVENTORY_MANAGE, self::INVENTORY_POST, self::ASSETS_MANAGE, self::ASSETS_DEPRECIATE, self::PARTIES_MANAGE, self::INVOICES_VIEW, self::INVOICES_DRAFT, self::INVOICES_POST, self::INVOICES_CANCEL, self::CREDIT_LIMIT_OVERRIDE, self::EINVOICE_MANAGE, self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::ENTRIES_POST, self::ENTRIES_REVERSE, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::VOUCHERS_POST, self::VOUCHERS_CANCEL, self::VOUCHERS_OVER_LIMIT, self::ACCOUNTS_MANAGE, self::PERIODS_CLOSE, self::PERIODS_REOPEN, self::YEAR_CLOSE, self::REPORTS_VIEW, self::REPORTS_LIMITED, self::AUDIT_VIEW]],
+        'management' => ['label' => 'الإدارة', 'perms' => [self::INVENTORY_VIEW, self::INVOICES_VIEW, self::ENTRIES_VIEW, self::VOUCHERS_VIEW, self::REPORTS_VIEW, self::REPORTS_LIMITED, self::AUDIT_VIEW]],
         'system_admin' => ['label' => 'مدير النظام', 'perms' => [self::SETTINGS_MANAGE, self::USERS_MANAGE]],
     ];
 }

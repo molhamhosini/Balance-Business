@@ -65,8 +65,9 @@ class JournalEntryResource extends Resource
             Forms\Components\Section::make(__('Lines'))->schema([
                 Forms\Components\Repeater::make('lines')->hiddenLabel()->live(debounce: 400)
                     ->schema([
-                        Forms\Components\Select::make('account_id')->label(__('Account'))->options(fn () => Options::postableAccounts())->searchable()->required()->columnSpan(4),
-                        Forms\Components\TextInput::make('description')->label(__('Label'))->columnSpan(3),
+                        Forms\Components\Select::make('account_id')->label(__('Account'))->options(fn () => Options::postableAccounts())->searchable()->required()->columnSpan(3),
+                        Forms\Components\TextInput::make('description')->label(__('Label'))->columnSpan(2),
+                        Forms\Components\Select::make('cost_center_id')->label(__('Cost center'))->options(fn () => Options::costCenters())->columnSpan(2)->placeholder('—'),
                         Forms\Components\TextInput::make('debit')->label(__('Debit'))->numeric()->minValue(0)->default(0)->columnSpan(2),
                         Forms\Components\TextInput::make('credit')->label(__('Credit'))->numeric()->minValue(0)->default(0)->columnSpan(2),
                         Forms\Components\Select::make('tax_code_id')->label(__('Tax'))->options(fn () => Options::taxCodes())->columnSpan(1)->placeholder('—'),

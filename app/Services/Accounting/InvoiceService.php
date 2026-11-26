@@ -6,7 +6,10 @@ use App\Exceptions\AccountingException;
 use App\Models\Allocation;
 use App\Models\AuditLog;
 use App\Models\Invoice;
+use App\Models\ExchangeRate;
 use App\Models\InvoiceLine;
+use App\Models\Item;
+use App\Models\Warehouse;
 use App\Models\JournalEntry;
 use App\Models\TaxCode;
 use App\Models\User;
@@ -30,7 +33,7 @@ class InvoiceService
     /** Warnings raised while posting (e.g. credit limit exceeded in "warn" mode). */
     public array $warnings = [];
 
-    public function __construct(private PostingService $posting, private SequenceService $sequences) {}
+    public function __construct(private PostingService $posting, private SequenceService $sequences, private InventoryService $inventory) {}
 
     /** Line amounts in fils: [net, tax, total] (reverse-charge tax is not added to the total). */
     public function lineAmounts(string|float $qty, string|float $price, ?TaxCode $code): array
@@ -71,13 +74,35 @@ class InvoiceService
             $before = $inv->exists ? $inv->getOriginal() : null;
             $inv->created_by ??= $user->id;
             $inv->status = 'draft';
+            $inv->currency = $inv->currency ?: 'AED';
+            if ($inv->currency === 'AED') {
+                $inv->fx_rate = 1;
+            } elseif (! $inv->fx_rate || (float) $inv->fx_rate === 1.0) {
+                $inv->fx_rate = ExchangeRate::rateFor($inv->company_id, $inv->currency, $inv->date->toDateString());
+            }
+            $rate = (float) $inv->fx_rate;
+            $defaultWh = Warehouse::where('company_id', $inv->company_id)->where('branch_id', $inv->branch_id)->orderBy('id')->value('id')
+                ?? Warehouse::where('company_id', $inv->company_id)->orderBy('id')->value('id');
             if (! $inv->due_date) {
                 $inv->due_date = $inv->date->copy()->addDays($inv->party->payment_terms_days);
             }
             $inv->save();
             $inv->lines()->delete();
-            $sub = $taxTotal = 0;
+            $sub = $taxTotal = $base = 0;
             foreach (array_values($lines) as $i => $l) {
+                $item = ! empty($l['item_id']) ? Item::where('company_id', $inv->company_id)->find($l['item_id']) : null;
+                if ($item) {
+                    $l['unit'] = ($l['unit'] ?? null) ?: $item->unit;
+                    $l['description'] = ($l['description'] ?? null) ?: $item->name_ar;
+                    $l['account_id'] = ($inv->isSale() || ! $item->isStock()) ? (($l['account_id'] ?? null) ?: $this->itemAccount($inv, $item)) : $this->itemAccount($inv, $item);
+                    $l['warehouse_id'] = $item->isStock() ? (($l['warehouse_id'] ?? null) ?: $defaultWh) : null;
+                    if (! array_key_exists('tax_code_id', $l)) {
+                        $l['tax_code_id'] = $inv->party->tax_code_id ?? $item->tax_code_id;
+                    }
+                }
+                if (empty($l['account_id'])) {
+                    throw new AccountingException(__('Line :n: choose an item or an account.', ['n' => $i + 1]));
+                }
                 $l['tax_code_id'] = array_key_exists('tax_code_id', $l) ? $l['tax_code_id'] : $inv->party->tax_code_id; // party's tax classification by default
                 $code = ! empty($l['tax_code_id']) ? TaxCode::find($l['tax_code_id']) : null;
                 if ($code && $code->type === 'reverse_charge' && $inv->isSale()) {
@@ -88,18 +113,31 @@ class InvoiceService
                     throw new AccountingException(__('Line :n: quantity and price must be greater than zero.', ['n' => $i + 1]));
                 }
                 InvoiceLine::create([
-                    'invoice_id' => $inv->id, 'account_id' => $l['account_id'], 'description' => $l['description'] ?: '-',
-                    'quantity' => $l['quantity'] ?? 1, 'unit' => $l['unit'] ?? null, 'unit_price' => $l['unit_price'] ?? 0,
+                    'invoice_id' => $inv->id, 'item_id' => $item?->id, 'warehouse_id' => $l['warehouse_id'] ?? null,
+                    'account_id' => $l['account_id'], 'description' => ($l['description'] ?? null) ?: '-',
+                    'quantity' => $l['quantity'] ?? 1, 'unit' => $l['unit'] ?? null, 'unit_factor' => $item ? $item->factorOf($l['unit'] ?? null) : 1,
+                    'unit_price' => $l['unit_price'] ?? 0, 'cost_center_id' => $l['cost_center_id'] ?? null,
                     'tax_code_id' => $code?->id, 'net' => Money::fromCents($net), 'tax' => Money::fromCents($tax), 'total' => Money::fromCents($total), 'sort' => $i,
                 ]);
                 $sub += $net;
                 $taxTotal += $total - $net;
+                $base += (int) round($net * $rate) + (int) round(($total - $net) * $rate);
             }
-            $inv->forceFill(['subtotal' => Money::fromCents($sub), 'tax_total' => Money::fromCents($taxTotal), 'total' => Money::fromCents($sub + $taxTotal)])->saveQuietly();
+            $inv->forceFill(['subtotal' => Money::fromCents($sub), 'tax_total' => Money::fromCents($taxTotal), 'total' => Money::fromCents($sub + $taxTotal), 'base_total' => Money::fromCents($base)])->saveQuietly();
             AuditLog::record($before ? 'updated' : 'created', $inv, $before ? array_intersect_key($before, array_flip(['date', 'party_id', 'total'])) : null, $inv->only(['date', 'party_id', 'total']));
 
             return $inv->fresh();
         });
+    }
+
+    /** Account an item line posts to: sales account on sales, inventory (stock) or expense (service) on purchases. */
+    private function itemAccount(Invoice $inv, Item $item): ?int
+    {
+        if ($inv->isSale()) {
+            return $item->sales_account_id;
+        }
+
+        return $item->isStock() ? ($item->inventory_account_id ?? $inv->company->systemAccount('inventory')?->id) : $item->purchase_account_id;
     }
 
     private function validateHeader(Invoice $inv): void
@@ -165,7 +203,7 @@ class InvoiceService
                 'reference' => $inv->supplier_invoice_number,
                 'source_type' => $inv->getMorphClass(), 'source_id' => $inv->id, 'created_by' => $inv->created_by,
             ]);
-            $this->posting->replaceLines($entry, $this->journalLines($inv));
+            $this->posting->replaceLines($entry, array_merge($this->journalLines($inv), $this->stockLines($inv, $entry->id)));
             $number = $this->sequences->next($inv->company_id, Invoice::PREFIX[$inv->kind], (int) $inv->date->format('Y'));
             $entry->forceFill(['number' => $number])->save();
             $this->posting->post($entry, $user, system: true);
@@ -175,7 +213,7 @@ class InvoiceService
 
             // A credit/debit note against a credit invoice settles it automatically.
             if ($inv->original && $inv->original->payment === 'credit' && $inv->payment === 'credit') {
-                $amount = min(Money::toCents($inv->total), $inv->original->openCents());
+                $amount = min($inv->baseTotalCents(), $inv->original->openCents());
                 if ($amount > 0) {
                     Allocation::create(['company_id' => $inv->company_id, 'invoice_id' => $inv->original_invoice_id, 'credit_invoice_id' => $inv->id, 'amount' => Money::fromCents($amount), 'created_by' => $user->id]);
                     AuditLog::record('allocated', $inv->original, null, ['credit_note' => $number, 'amount' => Money::fromCents($amount)]);
@@ -193,7 +231,7 @@ class InvoiceService
         if ($inv->kind !== 'sale' || $inv->payment !== 'credit' || $limit <= 0) {
             return;
         }
-        $after = $party->balance() + Money::toCents($inv->total);
+        $after = $party->balance() + $inv->baseTotalCents();
         if ($after <= $limit) {
             return;
         }
@@ -214,21 +252,26 @@ class InvoiceService
         $dir = $sale ? 'sale' : 'purchase';
         $side = fn (int $cents, bool $debit) => $debit ? ['debit' => Money::fromCents($cents), 'credit' => 0] : ['debit' => 0, 'credit' => Money::fromCents($cents)];
 
+        // Amounts in AED; a foreign-currency document keeps the original amount on the party line.
+        $rate = (float) ($inv->fx_rate ?: 1);
+        $fc = $inv->currency && $inv->currency !== 'AED' ? ['currency' => $inv->currency, 'fx_rate' => $inv->fx_rate] : [];
+        $aed = fn (int $cents) => (int) round($cents * $rate);
         $lines = [];
-        $total = Money::toCents($inv->total);
+        $total = $inv->baseTotalCents();
         $lines[] = ($inv->payment === 'cash'
             ? ['account_id' => $inv->cash_account_id]
             : ['account_id' => $inv->party->account_id, 'party_id' => $inv->party_id])
-            + $side($total, $partyDebit) + ['description' => $inv->party->name];
+            + $side($total, $partyDebit) + ['description' => $inv->party->name] + ($fc ? $fc + ['amount_fc' => $inv->total] : []);
 
         $vat = []; // tax_code_id => [base, tax]
         foreach ($inv->lines()->with('taxCode')->get() as $l) {
-            $net = Money::toCents($l->net);
-            $lines[] = ['account_id' => $l->account_id, 'description' => $l->description, 'tax_code_id' => $l->tax_code_id, 'tax_direction' => $l->tax_code_id ? $dir : null] + $side($net, ! $partyDebit);
+            $net = $aed(Money::toCents($l->net));
+            $lines[] = ['account_id' => $l->account_id, 'description' => $l->description, 'cost_center_id' => $l->cost_center_id, 'tax_code_id' => $l->tax_code_id, 'tax_direction' => $l->tax_code_id ? $dir : null]
+                + $side($net, ! $partyDebit) + ($fc ? $fc + ['amount_fc' => $l->net] : []);
             if ($l->taxCode && in_array($l->taxCode->type, ['standard', 'reverse_charge'], true)) {
                 $vat[$l->tax_code_id] ??= [0, 0, $l->taxCode];
                 $vat[$l->tax_code_id][0] += $net;
-                $vat[$l->tax_code_id][1] += Money::toCents($l->tax);
+                $vat[$l->tax_code_id][1] += $aed(Money::toCents($l->tax));
             }
         }
         foreach ($vat as $codeId => [$base, $tax, $code]) {
@@ -248,6 +291,62 @@ class InvoiceService
         }
 
         return $lines;
+    }
+
+    /**
+     * Stock moves of the item lines and their cost entries (requirements §3 "فاتورة بيع مع مخزون"):
+     *   sale            Dr cost of sales / Cr inventory (at average cost)
+     *   sales return    Dr inventory / Cr cost of sales (at the cost of the original sale)
+     *   purchase        stock in at the net bill value (the line itself is posted to inventory)
+     *   purchase return stock out at the bill price (the line itself credits inventory)
+     */
+    private function stockLines(Invoice $inv, int $entryId): array
+    {
+        $out = [];
+        $rate = (float) ($inv->fx_rate ?: 1);
+        $date = $inv->date->toDateString();
+        foreach ($inv->lines()->with(['item.company', 'warehouse'])->get() as $l) {
+            if (! $l->item?->isStock()) {
+                continue;
+            }
+            $milli = InventoryService::baseMilli($l->quantity, $l->unit_factor);
+            $wh = $l->warehouse ?? throw new AccountingException(__('Choose a warehouse for :i.', ['i' => $l->item->label]));
+            $invAcc = $l->item->inventory_account_id ?? $inv->company->systemAccount('inventory')?->id;
+            $cogsAcc = $l->item->cogs_account_id ?? $inv->company->systemAccount('cogs')?->id;
+            $desc = $l->item->name_ar.' × '.rtrim(rtrim((string) $l->quantity, '0'), '.');
+            $netAed = (int) round(Money::toCents($l->net) * $rate);
+            switch ($inv->kind) {
+                case 'sale':
+                    $cost = -Money::toCents($this->inventory->issue($l->item, $wh, $milli, $date, $inv, $entryId, $desc)->value);
+                    $l->forceFill(['cost' => Money::fromCents($cost)])->saveQuietly();
+                    if ($cost === 0) {
+                        break;
+                    }
+                    $out[] = ['account_id' => $cogsAcc, 'debit' => Money::fromCents($cost), 'credit' => 0, 'description' => __('Cost of sales').' — '.$desc, 'cost_center_id' => $l->cost_center_id];
+                    $out[] = ['account_id' => $invAcc, 'debit' => 0, 'credit' => Money::fromCents($cost), 'description' => __('Cost of sales').' — '.$desc];
+                    $l->forceFill(['cost' => Money::fromCents($cost)])->saveQuietly();
+                    break;
+                case 'sale_return':
+                    $orig = $inv->original?->lines()->where('item_id', $l->item_id)->whereNotNull('cost')->first();
+                    $unit = $orig ? Money::toCents($orig->cost) / max(1, InventoryService::baseMilli($orig->quantity, $orig->unit_factor)) : (float) $l->item->avg_cost / 10;
+                    $cost = (int) round($milli * $unit);
+                    if ($cost > 0) {
+                        $this->inventory->receive($l->item, $wh, $milli, $cost, $date, $inv, $entryId, $desc);
+                        $out[] = ['account_id' => $invAcc, 'debit' => Money::fromCents($cost), 'credit' => 0, 'description' => __('Returned to stock').' — '.$desc];
+                        $out[] = ['account_id' => $cogsAcc, 'debit' => 0, 'credit' => Money::fromCents($cost), 'description' => __('Returned to stock').' — '.$desc, 'cost_center_id' => $l->cost_center_id];
+                    }
+                    $l->forceFill(['cost' => Money::fromCents($cost)])->saveQuietly();
+                    break;
+                case 'purchase':
+                    $this->inventory->receive($l->item, $wh, $milli, $netAed, $date, $inv, $entryId, $desc);
+                    break;
+                case 'purchase_return':
+                    $this->inventory->issue($l->item, $wh, $milli, $date, $inv, $entryId, $desc, $netAed);
+                    break;
+            }
+        }
+
+        return $out;
     }
 
     /** Cancel a posted invoice by reversing its entry. Not allowed once sent as an e-invoice (§5). */
@@ -270,7 +369,8 @@ class InvoiceService
                 throw new AccountingException(__('Remove the payments allocated to this invoice first.'));
             }
             $inv->allocations()->delete(); // credit-note links to it, if any
-            $this->posting->reverse($inv->journalEntry, $user, $reason, null, system: true);
+            $rev = $this->posting->reverse($inv->journalEntry, $user, $reason, null, system: true);
+            $this->inventory->reverseMoves($inv, $rev->date->toDateString(), $rev->id);
             $inv->status = 'cancelled';
             $inv->save();
             AuditLog::record('cancelled', $inv, ['status' => 'posted'], ['status' => 'cancelled'], $reason);
@@ -288,7 +388,7 @@ class InvoiceService
         $return = new Invoice([
             'company_id' => $inv->company_id, 'branch_id' => $inv->branch_id,
             'kind' => $inv->kind === 'sale' ? 'sale_return' : 'purchase_return',
-            'payment' => $inv->payment, 'cash_account_id' => $inv->cash_account_id,
+            'payment' => $inv->payment, 'cash_account_id' => $inv->cash_account_id, 'currency' => $inv->currency, 'fx_rate' => $inv->fx_rate,
             'party_id' => $inv->party_id, 'date' => now()->toDateString(), 'original_invoice_id' => $inv->id,
             'description' => __('Return of :n', ['n' => $inv->number]),
         ]);
@@ -297,6 +397,7 @@ class InvoiceService
         return $this->saveDraft($return, $inv->lines->map(fn ($l) => [
             'account_id' => $returnsAccount ?? $l->account_id, 'description' => $l->description, 'quantity' => $l->quantity,
             'unit' => $l->unit, 'unit_price' => $l->unit_price, 'tax_code_id' => $l->tax_code_id,
+            'item_id' => $l->item_id, 'warehouse_id' => $l->warehouse_id, 'cost_center_id' => $l->cost_center_id,
         ])->all(), $user);
     }
 
@@ -386,5 +487,35 @@ class InvoiceService
         if ($amount > 0) {
             $this->allocate($v, [$inv->id => Money::fromCents($amount)], $user, authorized: true);
         }
+    }
+
+    /**
+     * Close the remaining open amount of an invoice to exchange differences (foreign-currency invoices
+     * settled at another rate, or small rounding left after payment).
+     */
+    public function writeOffDifference(Invoice $inv, User $user, string $reason): void
+    {
+        $this->posting->authorize($user, Perm::INVOICES_CANCEL);
+        DB::transaction(function () use ($inv, $user, $reason) {
+            $inv = Invoice::whereKey($inv->id)->lockForUpdate()->firstOrFail();
+            $open = $inv->openCents();
+            if ($open <= 0) {
+                throw new AccountingException(__('Nothing is open on this invoice.'));
+            }
+            if ($inv->currency === 'AED' && $open > 500) {
+                throw new AccountingException(__('Only small differences (up to 5.00) can be written off on AED invoices.'));
+            }
+            $receivable = in_array($inv->kind, ['sale', 'purchase_return'], true);
+            $party = ['account_id' => $inv->party->account_id, 'party_id' => $inv->party_id];
+            $amt = Money::fromCents($open);
+            $lines = $receivable
+                ? [['account_id' => $inv->company->systemAccount('fx_loss')->id, 'debit' => $amt, 'credit' => 0], $party + ['debit' => 0, 'credit' => $amt]]
+                : [$party + ['debit' => $amt, 'credit' => 0], ['account_id' => $inv->company->systemAccount('fx_gain')->id, 'debit' => 0, 'credit' => $amt]];
+            $desc = __('Exchange / rounding difference').' — '.$inv->number;
+            $entry = $this->posting->postGenerated($inv, 'invoice', 'JV', ['company_id' => $inv->company_id, 'branch_id' => $inv->branch_id, 'date' => now()->toDateString(), 'description' => $desc],
+                array_map(fn ($l) => $l + ['description' => $desc], $lines), $user);
+            Allocation::create(['company_id' => $inv->company_id, 'invoice_id' => $inv->id, 'journal_entry_id' => $entry->id, 'amount' => $amt, 'created_by' => $user->id]);
+            AuditLog::record('allocated', $inv, null, ['write_off' => $amt, 'entry' => $entry->number], $reason);
+        });
     }
 }

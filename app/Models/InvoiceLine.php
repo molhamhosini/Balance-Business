@@ -10,7 +10,7 @@ class InvoiceLine extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['quantity' => 'decimal:3', 'unit_price' => 'decimal:4', 'net' => 'decimal:2', 'tax' => 'decimal:2', 'total' => 'decimal:2'];
+    protected $casts = ['quantity' => 'decimal:3', 'unit_price' => 'decimal:4', 'net' => 'decimal:2', 'tax' => 'decimal:2', 'total' => 'decimal:2', 'cost' => 'decimal:2', 'unit_factor' => 'decimal:6'];
 
     protected static function booted(): void
     {
@@ -28,4 +28,7 @@ class InvoiceLine extends Model
     public function invoice(): BelongsTo { return $this->belongsTo(Invoice::class); }
     public function account(): BelongsTo { return $this->belongsTo(Account::class); }
     public function taxCode(): BelongsTo { return $this->belongsTo(TaxCode::class); }
+    public function item(): BelongsTo { return $this->belongsTo(Item::class); }
+    public function warehouse(): BelongsTo { return $this->belongsTo(Warehouse::class); }
+    public function costCenter(): BelongsTo { return $this->belongsTo(CostCenter::class); }
 }

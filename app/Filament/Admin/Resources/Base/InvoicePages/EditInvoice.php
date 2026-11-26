@@ -14,7 +14,7 @@ abstract class EditInvoice extends EditRecord
 {
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $data['lines'] = $this->record->lines->map(fn ($l) => $l->only(['account_id', 'description', 'quantity', 'unit', 'unit_price', 'tax_code_id']))->all();
+        $data['lines'] = $this->record->lines->map(fn ($l) => $l->only(['item_id', 'account_id', 'description', 'quantity', 'unit', 'unit_price', 'tax_code_id', 'warehouse_id', 'cost_center_id']))->all();
 
         return $data;
     }

@@ -109,28 +109,84 @@ abstract class InvoiceResource extends Resource
                     ->visible(fn (Get $get) => str_ends_with((string) $get('kind'), '_return'))
                     ->options(fn (Get $get) => Invoice::where('company_id', Options::companyId())->where('kind', static::side())->where('status', 'posted')
                         ->when($get('party_id'), fn ($q, $p) => $q->where('party_id', $p))->latest('date')->limit(200)->pluck('number', 'id')->all()),
+                Forms\Components\Select::make('currency')->label(__('Currency'))->options(fn () => Options::currencies())->default('AED')->required()->live(),
+                Forms\Components\TextInput::make('fx_rate')->label(__('Exchange rate (AED per unit)'))->numeric()->minValue(0.000001)
+                    ->visible(fn (Get $get) => $get('currency') && $get('currency') !== 'AED')
+                    ->placeholder(fn (Get $get) => static::ratePlaceholder($get))->helperText(__('Leave empty to use the rate of the invoice date.')),
                 Forms\Components\TextInput::make('description')->label(__('Description'))->columnSpanFull(),
             ]),
             Forms\Components\Section::make(__('Invoice lines'))->schema([
                 Forms\Components\Repeater::make('lines')->hiddenLabel()->required()->minItems(1)->reorderable()->cloneable()
                     ->addActionLabel(__('Add a line'))->columns(12)->defaultItems(1)->live(debounce: 500)
                     ->schema([
+                        Forms\Components\Select::make('item_id')->label(__('Item'))->options(fn () => Options::items())->searchable()->live()->columnSpan(3)
+                            ->afterStateUpdated(fn ($state, Get $get, Forms\Set $set) => static::fillFromItem($state, $get, $set)),
                         Forms\Components\Select::make('account_id')->label(__('Account'))->options($revenue)->searchable()->required()->columnSpan(3)
                             ->default(fn () => Options::companyId() ? \App\Models\Account::where('company_id', Options::companyId())->where('code', $sale ? '4111' : '5111')->value('id') : null),
-                        Forms\Components\TextInput::make('description')->label(__('Description'))->required()->columnSpan(3),
-                        Forms\Components\TextInput::make('quantity')->label(__('Qty'))->numeric()->default(1)->required()->columnSpan(1),
-                        Forms\Components\TextInput::make('unit')->label(__('Unit'))->placeholder(__('kg'))->columnSpan(1),
+                        Forms\Components\TextInput::make('description')->label(__('Description'))->required()->columnSpan(4),
+                        Forms\Components\Select::make('cost_center_id')->label(__('Cost center'))->options(fn () => Options::costCenters())->columnSpan(2),
+                        Forms\Components\TextInput::make('quantity')->label(__('Qty'))->numeric()->default(1)->required()->columnSpan(2),
+                        Forms\Components\TextInput::make('unit')->label(__('Unit'))->placeholder(__('kg'))->columnSpan(1)->live(onBlur: true)
+                            ->datalist(fn (Get $get) => ($i = static::lineItem($get)) ? array_merge([$i->unit], $i->units->pluck('name')->all()) : [])
+                            ->afterStateUpdated(function ($state, Get $get, Forms\Set $set) use ($sale) {
+                                $i = static::lineItem($get);
+                                if ($sale && $i) {
+                                    $u = $i->units->firstWhere('name', $state);
+                                    $set('unit_price', $u && (float) $u->sale_price ? $u->sale_price : round((float) $i->sale_price * (float) $i->factorOf($state), 4));
+                                }
+                            }),
                         Forms\Components\TextInput::make('unit_price')->label(__('Unit price'))->numeric()->required()->columnSpan(2),
                         Forms\Components\Select::make('tax_code_id')->label(__('Tax'))->options(fn () => Options::taxCodes())->columnSpan(2)
                             ->default(fn (Get $get) => ($get('../../party_id') ? Party::whereKey($get('../../party_id'))->value('tax_code_id') : null)
                                 ?? TaxCode::where('company_id', Options::companyId())->where('code', 'SR')->value('id')),
+                        Forms\Components\Select::make('warehouse_id')->label(__('Warehouse'))->options(fn () => Options::warehouses())->columnSpan(3)
+                            ->visible(fn (Get $get) => static::lineItem($get)?->isStock() ?? false)->placeholder(__('Branch warehouse')),
                     ]),
-                Forms\Components\Placeholder::make('totals')->hiddenLabel()->content(fn (Get $get) => static::totalsPreview($get('lines') ?? [])),
+                Forms\Components\Placeholder::make('totals')->hiddenLabel()->content(fn (Get $get) => static::totalsPreview($get('lines') ?? [], $get('currency') ?: 'AED')),
             ]),
         ]);
     }
 
-    public static function totalsPreview(array $lines): \Illuminate\Support\HtmlString
+    public static function lineItem(Get $get): ?\App\Models\Item
+    {
+        return $get('item_id') ? \App\Models\Item::with('units')->find($get('item_id')) : null;
+    }
+
+    /** Selecting an item fills account, description, unit, price and tax (party classification wins). */
+    public static function fillFromItem($itemId, Get $get, Forms\Set $set): void
+    {
+        $i = $itemId ? \App\Models\Item::find($itemId) : null;
+        if (! $i) {
+            return;
+        }
+        $sale = static::side() === 'sale';
+        $account = $sale ? $i->sales_account_id : ($i->isStock() ? ($i->inventory_account_id ?? \Filament\Facades\Filament::getTenant()->systemAccount('inventory')?->id) : $i->purchase_account_id);
+        if ($account) {
+            $set('account_id', $account);
+        }
+        $set('description', $i->name);
+        $set('unit', $i->unit);
+        if ($sale) {
+            $set('unit_price', (float) $i->sale_price);
+        } elseif ($i->isStock() && (float) $i->avg_cost) {
+            $set('unit_price', round((float) $i->avg_cost, 4));
+        }
+        $partyTax = $get('../../party_id') ? Party::whereKey($get('../../party_id'))->value('tax_code_id') : null;
+        if (! $partyTax && $i->tax_code_id) {
+            $set('tax_code_id', $i->tax_code_id);
+        }
+    }
+
+    public static function ratePlaceholder(Get $get): ?string
+    {
+        try {
+            return (string) \App\Models\ExchangeRate::rateFor(Options::companyId(), $get('currency'), \Illuminate\Support\Carbon::parse($get('date') ?: now())->toDateString());
+        } catch (\Throwable) {
+            return __('No rate entered for this date');
+        }
+    }
+
+    public static function totalsPreview(array $lines, string $currency = 'AED'): \Illuminate\Support\HtmlString
     {
         $sub = $tax = 0;
         $svc = app(InvoiceService::class);
@@ -143,7 +199,7 @@ abstract class InvoiceResource extends Resource
             $tax += $t - $n;
         }
 
-        return new \Illuminate\Support\HtmlString('<div class="bb-totals"><div><span>'.e(__('Untaxed amount')).'</span><b>'.Money::format($sub).'</b></div><div><span>'.e(__('VAT')).'</span><b>'.Money::format($tax).'</b></div><div class="grand"><span>'.e(__('Total')).'</span><b>'.Money::format($sub + $tax).' AED</b></div></div>');
+        return new \Illuminate\Support\HtmlString('<div class="bb-totals"><div><span>'.e(__('Untaxed amount')).'</span><b>'.Money::format($sub).'</b></div><div><span>'.e(__('VAT')).'</span><b>'.Money::format($tax).'</b></div><div class="grand"><span>'.e(__('Total')).'</span><b>'.Money::format($sub + $tax).' '.e($currency).'</b></div></div>');
     }
 
     public static function infolist(Infolist $infolist): Infolist
@@ -168,6 +224,8 @@ abstract class InvoiceResource extends Resource
                     Infolists\Components\TextEntry::make('branch.name')->label(__('Branch')),
                     Infolists\Components\TextEntry::make('supplier_invoice_number')->label(__('Supplier invoice no.'))->placeholder('—')->visible(fn (Invoice $record) => ! $record->isSale()),
                     Infolists\Components\TextEntry::make('original.number')->label(__('Original invoice'))->placeholder('—')->visible(fn (Invoice $record) => $record->isReturn()),
+                    Infolists\Components\TextEntry::make('currency')->label(__('Currency'))->visible(fn (Invoice $record) => $record->currency !== 'AED')
+                        ->formatStateUsing(fn (Invoice $record) => $record->currency.' · '.__('Rate').' '.rtrim(rtrim((string) $record->fx_rate, '0'), '.').' · '.Money::format($record->baseTotalCents()).' AED'),
                     Infolists\Components\TextEntry::make('description')->label(__('Description'))->placeholder('—')->columnSpanFull(),
                 ]),
             Infolists\Components\Section::make(__('Invoice lines'))->schema([
@@ -281,6 +339,16 @@ abstract class InvoiceResource extends Resource
                     $livewire->refreshRecord();
                 }
             });
+    }
+
+    /** Close a small residual (rounding, bank charge) or an exchange difference left after payment. */
+    public static function writeOffAction(): Action
+    {
+        return Action::make('writeOff')->label(__('Write off difference'))->icon('heroicon-o-scissors')->color('gray')
+            ->visible(fn (Invoice $record) => $record->status === 'posted' && $record->openCents() > 0 && ($record->currency !== 'AED' || $record->openCents() <= 500) && auth()->user()->can(Perm::INVOICES_CANCEL))
+            ->modalDescription(fn (Invoice $record) => __('Closes the remaining :a AED to exchange gain / loss.', ['a' => Money::format($record->openCents())]))
+            ->form([Forms\Components\TextInput::make('reason')->label(__('Reason'))->required()])
+            ->action(fn (Invoice $record, array $data, $livewire) => static::attempt(fn () => app(InvoiceService::class)->writeOffDifference($record, auth()->user(), $data['reason']), __('Saved')) && $livewire->refreshRecord());
     }
 
     public static function creditNoteAction(): Action

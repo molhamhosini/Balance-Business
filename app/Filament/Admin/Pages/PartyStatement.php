@@ -12,6 +12,7 @@ class PartyStatement extends ReportPage
 {
     protected static ?string $navigationIcon = 'heroicon-o-user-circle';
     protected static ?int $navigationSort = 7;
+    protected static bool $costCenterFilter = false;
     protected static string $view = 'filament.pages.party-statement';
     protected static ?string $reportPermission = Perm::INVOICES_VIEW;
 
@@ -50,7 +51,7 @@ class PartyStatement extends ReportPage
     {
         $p = $this->getParty();
 
-        return $p ? app(ReportService::class)->partyStatement($p, $this->from, $this->to) : null;
+        return $p ? $this->reports()->partyStatement($p, $this->from, $this->to) : null;
     }
 
     protected function exportRows(): array

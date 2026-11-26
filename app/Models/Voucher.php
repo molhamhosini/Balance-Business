@@ -13,6 +13,8 @@ class Voucher extends Model
 
     public const STATUSES = ['draft' => 'مسودة', 'posted' => 'مرحّل', 'cancelled' => 'ملغى'];
 
+    public const CHEQUE_STATUSES = ['in_box' => 'بالصندوق', 'deposited' => 'مودع', 'issued' => 'صادر', 'cleared' => 'مصروف من البنك', 'returned' => 'مرتجع'];
+
     public const METHODS = ['cash' => 'نقداً', 'bank_transfer' => 'تحويل بنكي', 'cheque' => 'شيك', 'card' => 'بطاقة'];
 
     protected $guarded = ['id'];
@@ -22,7 +24,7 @@ class Voucher extends Model
     protected static function booted(): void
     {
         static::updating(function (Voucher $v) {
-            if (($v->getOriginal('status') ?? 'draft') !== 'draft' && array_diff(array_keys($v->getDirty()), ['status', 'updated_at'])) {
+            if (($v->getOriginal('status') ?? 'draft') !== 'draft' && array_diff(array_keys($v->getDirty()), ['status', 'cheque_status', 'cheque_entry_id', 'updated_at'])) {
                 throw new AccountingException(__('A posted voucher cannot be modified. Cancel it with a reversing entry.'));
             }
         });
@@ -41,6 +43,8 @@ class Voucher extends Model
     public function party(): BelongsTo { return $this->belongsTo(Party::class); }
     public function allocations(): \Illuminate\Database\Eloquent\Relations\HasMany { return $this->hasMany(Allocation::class); }
     public function paysInvoice(): BelongsTo { return $this->belongsTo(Invoice::class, 'pays_invoice_id'); }
+    public function chequeEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class, 'cheque_entry_id'); }
+    public function costCenter(): BelongsTo { return $this->belongsTo(CostCenter::class); }
     public function journalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function poster(): BelongsTo { return $this->belongsTo(User::class, 'posted_by'); }

@@ -10,6 +10,7 @@ class VatReturn extends ReportPage
 {
     protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
     protected static ?int $navigationSort = 6;
+    protected static bool $costCenterFilter = false;
     protected static string $view = 'filament.pages.vat-return';
 
     public static function getNavigationLabel(): string { return __('VAT return (VAT 201)'); }
@@ -29,7 +30,7 @@ class VatReturn extends ReportPage
 
     public function getData(): array
     {
-        return app(ReportService::class)->vat201($this->company(), $this->from, $this->to);
+        return $this->reports()->vat201($this->company(), $this->from, $this->to);
     }
 
     protected function exportRows(): array

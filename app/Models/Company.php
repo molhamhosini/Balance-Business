@@ -13,7 +13,7 @@ class Company extends Model implements HasCurrentTenantLabel
 
     protected $casts = [
         'segregation_of_duties' => 'boolean',
-        'allow_negative_cash' => 'boolean',
+        'allow_negative_cash' => 'boolean', 'allow_negative_stock' => 'boolean',
         'voucher_approval_limit' => 'decimal:2',
     ];
 
@@ -37,6 +37,16 @@ class Company extends Model implements HasCurrentTenantLabel
     public function vouchers(): HasMany { return $this->hasMany(Voucher::class); }
     public function parties(): HasMany { return $this->hasMany(Party::class); }
     public function invoices(): HasMany { return $this->hasMany(Invoice::class); }
+    public function warehouses(): HasMany { return $this->hasMany(Warehouse::class); }
+    public function items(): HasMany { return $this->hasMany(Item::class); }
+    public function costCenters(): HasMany { return $this->hasMany(CostCenter::class); }
+    public function assets(): HasMany { return $this->hasMany(Asset::class); }
+    public function assetCategories(): HasMany { return $this->hasMany(AssetCategory::class); }
+    public function exchangeRates(): HasMany { return $this->hasMany(ExchangeRate::class); }
+    public function transfers(): HasMany { return $this->hasMany(Transfer::class); }
+    public function bankStatements(): HasMany { return $this->hasMany(BankStatement::class); }
+    public function stockDocuments(): HasMany { return $this->hasMany(StockDocument::class); }
+    public function depreciationRuns(): HasMany { return $this->hasMany(DepreciationRun::class); }
     public function auditLogs(): HasMany { return $this->hasMany(AuditLog::class); }
 
     public function systemAccount(string $key): ?Account

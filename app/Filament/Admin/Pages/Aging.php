@@ -11,6 +11,7 @@ class Aging extends ReportPage
 {
     protected static ?string $navigationIcon = 'heroicon-o-clock';
     protected static ?int $navigationSort = 8;
+    protected static bool $costCenterFilter = false;
     protected static string $view = 'filament.pages.aging';
 
     #[Url] public ?string $type = 'customer';
@@ -39,7 +40,7 @@ class Aging extends ReportPage
 
     public function getData(): array
     {
-        return app(ReportService::class)->aging($this->company(), $this->type === 'supplier' ? 'supplier' : 'customer', \Illuminate\Support\Carbon::parse($this->to)->toDateString(), $this->branchId());
+        return $this->reports()->aging($this->company(), $this->type === 'supplier' ? 'supplier' : 'customer', \Illuminate\Support\Carbon::parse($this->to)->toDateString(), $this->branchId());
     }
 
     public function buckets(): array

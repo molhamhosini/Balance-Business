@@ -101,6 +101,57 @@ class DemoSeeder extends Seeder
                 ['account_id' => $a($isMeat ? '1145' : '5111'), 'description' => $isMeat ? 'رؤوس أغنام حية' : 'لحوم مشكلة', 'quantity' => $isMeat ? '60' : '300', 'unit' => $isMeat ? 'رأس' : 'كغ', 'unit_price' => $isMeat ? '650' : '36', 'tax_code_id' => $tax('SR')],
             ], ['supplier_invoice_number' => 'F-'.(1000 + $company->id)]), $acct);
             $vouchers->post($invoices->registerPayment($bill, ['date' => "$month-10", 'cash_account_id' => $a('1121'), 'amount' => $isMeat ? '20000' : '5000', 'payment_method' => 'bank_transfer'], $entry, $vouchers), $chief);
+
+            // Phase 3: items and stock, cheques, transfers, fixed assets, currencies
+            $inventory = app(\App\Services\Accounting\InventoryService::class);
+            $banking = app(\App\Services\Accounting\BankingService::class);
+            \App\Models\ExchangeRate::create(['company_id' => $company->id, 'currency' => 'USD', 'date' => "$month-01", 'rate' => '3.6725']);
+            $wh = \App\Models\Warehouse::where('company_id', $company->id)->orderBy('id')->first();
+            $mkItem = fn (string $code, string $ar, string $en, string $unit, string $price, string $type = 'stock') => \App\Models\Item::create([
+                'company_id' => $company->id, 'code' => $code, 'name_ar' => $ar, 'name_en' => $en, 'type' => $type, 'unit' => $unit, 'sale_price' => $price,
+                'tax_code_id' => $tax('SR'), 'sales_account_id' => $rev, 'inventory_account_id' => $a('1141'), 'cogs_account_id' => $a('5111'),
+            ]);
+            $lamb = $mkItem('P00001', $isMeat ? 'لحم غنم محلي' : 'لحم مفروم', $isMeat ? 'Local lamb' : 'Minced meat', 'كغ', $isMeat ? '45' : '38');
+            $lamb->units()->create(['name' => 'كرتونة', 'factor' => 10, 'sale_price' => $isMeat ? '430' : '360']);
+            $beef = $mkItem('P00002', $isMeat ? 'لحم بقري مبرد' : 'جبنة بيضاء', $isMeat ? 'Chilled beef' : 'White cheese', 'كغ', $isMeat ? '39' : '28');
+            $mkItem('S00001', 'خدمة تقطيع وتغليف', 'Cutting & packing', 'خدمة', '15', 'service');
+            $ost = $inventory->saveDocument(new \App\Models\StockDocument(['company_id' => $company->id, 'branch_id' => $branch->id, 'type' => 'opening', 'date' => "$month-01",
+                'warehouse_id' => $wh->id, 'counter_account_id' => $a('3111'), 'description' => 'رصيد افتتاحي للمخزون']), [
+                ['item_id' => $lamb->id, 'quantity' => '500', 'unit_cost' => $isMeat ? '30' : '24'],
+                ['item_id' => $beef->id, 'quantity' => '300', 'unit_cost' => $isMeat ? '27' : '18'],
+            ], $entry);
+            $inventory->postDocument($ost, $acct);
+            $invoices->post($mk('sale', $hotel, '18', [
+                ['item_id' => $lamb->id, 'quantity' => '12', 'unit' => 'كرتونة', 'unit_price' => $isMeat ? '430' : '360', 'tax_code_id' => $tax('SR')],
+                ['item_id' => $beef->id, 'quantity' => '35', 'unit_price' => $isMeat ? '39' : '28', 'tax_code_id' => $tax('SR')],
+            ]), $acct);
+            $iss = $inventory->saveDocument(new \App\Models\StockDocument(['company_id' => $company->id, 'branch_id' => $branch->id, 'type' => 'issue', 'date' => "$month-19",
+                'warehouse_id' => $wh->id, 'counter_account_id' => $a('6470') ?? $a('5111'), 'description' => 'هالك وتالف']), [['item_id' => $beef->id, 'quantity' => '4']], $entry);
+            $inventory->postDocument($iss, $acct);
+
+            $chq = $vouchers->saveDraft(new Voucher(['company_id' => $company->id, 'branch_id' => $branch->id, 'type' => 'receipt', 'date' => "$month-16",
+                'cash_account_id' => $a('1121'), 'party_id' => $hotel->id, 'counter_account_id' => $hotel->account_id, 'tax_code_id' => $tax('OS'), 'amount' => '2500',
+                'party_name' => $hotel->name_ar, 'payment_method' => 'cheque', 'cheque_number' => '000'.(4410 + $company->id), 'cheque_bank' => 'بنك أبوظبي الأول',
+                'cheque_due_date' => "$month-25", 'description' => 'شيك دفعة على الحساب']), $entry);
+            $chq = $vouchers->post($chq, $acct);
+            $banking->chequeAction($chq->fresh(), 'deposit', $acct, "$month-25", $a('1121'));
+            $vouchers->post($vouchers->saveDraft(new Voucher(['company_id' => $company->id, 'branch_id' => $branch->id, 'type' => 'receipt', 'date' => "$month-21",
+                'cash_account_id' => $a('1121'), 'party_id' => $hotel->id, 'counter_account_id' => $hotel->account_id, 'tax_code_id' => $tax('OS'), 'amount' => '1800',
+                'party_name' => $hotel->name_ar, 'payment_method' => 'cheque', 'cheque_number' => '000'.(5520 + $company->id), 'cheque_bank' => 'بنك الإمارات دبي الوطني',
+                'cheque_due_date' => now()->addDays(10)->toDateString(), 'description' => 'شيك مؤجل']), $entry), $acct);
+
+            $trf = $banking->saveTransfer(new \App\Models\Transfer(['company_id' => $company->id, 'branch_id' => $branch->id, 'date' => "$month-14",
+                'from_account_id' => $a('1114'), 'to_account_id' => $a('1121'), 'amount' => '8000', 'reference' => 'DEP-'.(77 + $company->id), 'description' => 'إيداع نقدية الصندوق في البنك']), $entry);
+            $banking->postTransfer($trf, $acct);
+
+            $cat = \App\Models\AssetCategory::where('company_id', $company->id)->where('asset_account_id', $a('1216'))->first();
+            if ($cat) {
+                $assets = app(\App\Services\Accounting\AssetService::class);
+                $assets->create($company, ['branch_id' => $branch->id, 'asset_category_id' => $cat->id, 'name_ar' => $isMeat ? 'غرفة تبريد رئيسية' : 'ثلاجات عرض', 'name_en' => $isMeat ? 'Main cold room' : 'Display chillers',
+                    'purchase_date' => now()->subYear()->format('Y-m-01'), 'cost' => '115000', 'salvage_value' => '10000', 'useful_life_months' => 84,
+                    'opening_accumulated' => '15000', 'location' => $branch->name], $chief);
+                $assets->run($company, "$month-01", $chief);
+            }
         }
     }
 }

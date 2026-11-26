@@ -29,6 +29,14 @@ class Account extends Model
         'customers' => 'الحساب الرئيسي للعملاء',
         'suppliers' => 'الحساب الرئيسي للموردين',
         'banks' => 'الحساب الرئيسي للبنوك',
+        'cheques_in' => 'شيكات برسم التحصيل',
+        'cheques_out' => 'شيكات مؤجلة الدفع',
+        'inventory' => 'المخزون (افتراضي للأصناف)',
+        'cogs' => 'تكلفة المبيعات (افتراضي للأصناف)',
+        'freight_in' => 'تكاليف الشحن والتخليص',
+        'depreciation' => 'مصروف الإهلاك',
+        'asset_gain' => 'أرباح بيع أصول',
+        'asset_loss' => 'خسائر بيع أصول',
     ];
 
     protected $guarded = ['id'];
