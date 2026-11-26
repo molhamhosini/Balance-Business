@@ -116,6 +116,7 @@ class AccountResource extends Resource
                     $r->is_cash ? __('Cash') : null, $r->is_bank ? __('Bank') : null, $r->is_non_deductible ? __('Non-deductible') : null,
                     $r->is_related_party ? __('Related party') : null, $r->system_key ? __('System') : null, $r->source === 'activity' ? __('Activity') : null,
                     ! $r->is_active ? __('Inactive') : null,
+                    in_array($r->system_key, ['customers', 'suppliers'], true) ? \App\Models\Party::where('account_id', $r->id)->count().' '.($r->system_key === 'customers' ? __('Customers') : __('Suppliers')) : null,
                 ]))),
             ])
             ->filters([
@@ -131,6 +132,38 @@ class AccountResource extends Resource
             ->actions([
                 Tables\Actions\Action::make('ledger')->label(__('Ledger'))->icon('heroicon-o-document-magnifying-glass')->iconButton()
                     ->url(fn (Account $r) => Ledger::getUrl(['account' => $r->id])),
+                Tables\Actions\Action::make('addParty')->iconButton()->icon('heroicon-o-user-plus')->color('success')
+                    ->label(fn (Account $r) => $r->system_key === 'customers' ? __('Add customer') : __('Add supplier'))
+                    ->visible(fn (Account $r) => in_array($r->system_key, ['customers', 'suppliers'], true) && auth()->user()->can(Perm::PARTIES_MANAGE))
+                    ->modalHeading(fn (Account $r) => ($r->system_key === 'customers' ? __('Add customer') : __('Add supplier')).' — '.$r->label)
+                    ->modalDescription(__('The code is assigned automatically and sequentially under this account.'))
+                    ->form(fn () => [
+                        \Filament\Forms\Components\Grid::make(2)->schema([
+                            \Filament\Forms\Components\TextInput::make('name_ar')->label(__('Name (Arabic)'))->required(),
+                            \Filament\Forms\Components\TextInput::make('name_en')->label(__('Name (English)')),
+                            \Filament\Forms\Components\TextInput::make('trn')->label(__('TRN'))->length(15)->numeric(),
+                            \Filament\Forms\Components\Select::make('tax_code_id')->label(__('Tax classification'))->options(fn () => \App\Filament\Admin\Support\Options::taxCodes())->required()
+                                ->default(fn () => \App\Models\TaxCode::where('company_id', Filament::getTenant()->id)->where('code', 'SR')->value('id')),
+                            \Filament\Forms\Components\TextInput::make('phone')->label(__('Phone'))->tel(),
+                            \Filament\Forms\Components\TextInput::make('email')->label(__('Email'))->email(),
+                            \Filament\Forms\Components\TextInput::make('address')->label(__('Address'))->columnSpanFull(),
+                            \Filament\Forms\Components\TextInput::make('payment_terms_days')->label(__('Payment terms (days)'))->numeric()->default(30)->required(),
+                        ]),
+                    ])
+                    ->action(function (Account $record, array $data) {
+                        $party = null;
+                        if (static::attempt(function () use ($record, $data, &$party) {
+                            $party = app(\App\Services\Accounting\PartyService::class)->create(Filament::getTenant(), $data + ['type' => $record->system_key === 'customers' ? 'customer' : 'supplier'], auth()->user());
+                        })) {
+                            $res = $party->type === 'customer' ? CustomerResource::class : SupplierResource::class;
+                            \Filament\Notifications\Notification::make()->success()->title(__('Saved').': '.$party->label)
+                                ->actions([\Filament\Notifications\Actions\Action::make('open')->label(__('Open card'))->url($res::getUrl('view', ['record' => $party]))])->send();
+                        }
+                    }),
+                Tables\Actions\Action::make('parties')->iconButton()->icon('heroicon-o-users')->color('gray')
+                    ->label(fn (Account $r) => $r->system_key === 'customers' ? __('Customers') : __('Suppliers'))
+                    ->visible(fn (Account $r) => in_array($r->system_key, ['customers', 'suppliers'], true))
+                    ->url(fn (Account $r) => ($r->system_key === 'customers' ? CustomerResource::class : SupplierResource::class)::getUrl('index')),
                 Tables\Actions\Action::make('addChild')->label(__('Add sub-account'))->icon('heroicon-o-plus')->iconButton()
                     ->visible(fn (Account $r) => $r->level < 4 && auth()->user()->can(Perm::ACCOUNTS_MANAGE) && ! $r->lines()->exists())
                     ->url(fn (Account $r) => static::getUrl('create', ['parent' => $r->id])),

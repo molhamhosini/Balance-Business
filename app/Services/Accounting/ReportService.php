@@ -214,6 +214,9 @@ class ReportService
             // Reversals carry the opposite side, so they net off automatically.
             $value = $sale ? $c - $d : $d - $c;
             $boxes[$box][$r->is_tax_line ? 'vat' : 'amount'] += $value;
+            if (! $sale && ! $r->is_tax_line && $r->type === 'reverse_charge') {
+                $boxes['3']['amount'] += $value; // self-assessed: the base appears on both sides of the return
+            }
         }
 
         $salesBoxes = array_merge(array_values(Branch::VAT_BOX), ['2', '3', '4', '5', '6', '7']);
@@ -269,6 +272,82 @@ class ReportService
             'reverse_charge' => '10',
             default => null,
         };
+    }
+
+    /** Customer / supplier statement from the sub-ledger (posted entries carrying party_id). */
+    public function partyStatement(\App\Models\Party $party, string $from, string $to): array
+    {
+        $opening = $party->balance($this->dayBefore($from));
+        $rows = DB::table('journal_lines as l')->join('journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+            ->where('l.party_id', $party->id)->whereIn('e.status', ['posted', 'reversed'])
+            ->whereBetween('e.date', [$from, $to])->orderBy('e.date')->orderBy('e.id')->orderBy('l.id')
+            ->get(['e.id as entry_id', 'e.date', 'e.number', 'e.description as entry_description', 'l.description', 'l.debit', 'l.credit', 'e.source_type', 'e.source_id']);
+        $bal = $opening;
+        $dr = $cr = 0;
+        $out = [];
+        foreach ($rows as $r) {
+            $d = Money::toCents((string) $r->debit);
+            $c = Money::toCents((string) $r->credit);
+            $bal += $d - $c;
+            $dr += $d;
+            $cr += $c;
+            $out[] = ['entry_id' => $r->entry_id, 'date' => (string) $r->date, 'number' => $r->number, 'description' => $r->entry_description ?: $r->description, 'debit' => $d, 'credit' => $c, 'balance' => $bal];
+        }
+
+        return ['opening' => $opening, 'rows' => $out, 'debit' => $dr, 'credit' => $cr, 'closing' => $bal];
+    }
+
+    public const AGING_BUCKETS = ['current' => 'غير مستحق', '1-7' => '1-7', '8-15' => '8-15', '16-30' => '16-30', '31-60' => '31-60', '61-90' => '61-90', '90+' => '+90'];
+
+    /**
+     * Aging of open invoices by days past the due date, per party. Unallocated payments and credit notes
+     * (advances) are shown in their own column so the net equals the sub-ledger balance.
+     */
+    public function aging(Company $company, string $type, string $asOf, ?int $branchId = null): array
+    {
+        $kinds = $type === 'customer' ? ['sale', 'purchase_return'] : ['purchase', 'sale_return'];
+        $invoices = \App\Models\Invoice::with('party')->where('company_id', $company->id)->where('status', 'posted')->where('payment', 'credit')
+            ->whereIn('kind', $kinds)->where('date', '<=', $asOf)->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->whereHas('party', fn ($q) => $q->where('type', $type))->get();
+        $parties = [];
+        $blank = array_fill_keys(array_keys(self::AGING_BUCKETS), 0) + ['unapplied' => 0, 'total' => 0];
+        $as = \Carbon\Carbon::parse($asOf);
+        foreach ($invoices as $inv) {
+            $open = $inv->openCents();
+            if ($open === 0) {
+                continue;
+            }
+            $days = $inv->due_date ? (int) $inv->due_date->diffInDays($as, false) : 0;
+            $bucket = match (true) {
+                $days <= 0 => 'current', $days <= 7 => '1-7', $days <= 15 => '8-15', $days <= 30 => '16-30',
+                $days <= 60 => '31-60', $days <= 90 => '61-90', default => '90+',
+            };
+            $parties[$inv->party_id] ??= ['party' => $inv->party, 'invoices' => []] + $blank;
+            $parties[$inv->party_id][$bucket] += $open;
+            $parties[$inv->party_id]['total'] += $open;
+            $parties[$inv->party_id]['invoices'][] = ['id' => $inv->id, 'number' => $inv->number, 'date' => $inv->date->toDateString(), 'due' => $inv->due_date?->toDateString(), 'days' => max(0, $days), 'open' => $open, 'bucket' => $bucket];
+        }
+        // Unapplied credits: the sub-ledger balance not explained by open invoices (advances, unallocated notes).
+        $sign = $type === 'customer' ? 1 : -1;
+        foreach (\App\Models\Party::where('company_id', $company->id)->where('type', $type)->get() as $p) {
+            $balance = $sign * $p->balance($asOf);
+            $explained = $parties[$p->id]['total'] ?? 0;
+            $diff = $balance - $explained;
+            if ($diff !== 0) {
+                $parties[$p->id] ??= ['party' => $p, 'invoices' => []] + $blank;
+                $parties[$p->id]['unapplied'] += $diff;
+                $parties[$p->id]['total'] += $diff;
+            }
+        }
+        uasort($parties, fn ($a, $b) => strcmp($a['party']->code, $b['party']->code));
+        $totals = $blank;
+        foreach ($parties as $row) {
+            foreach (array_keys($blank) as $k) {
+                $totals[$k] += $row[$k];
+            }
+        }
+
+        return ['rows' => array_values($parties), 'totals' => $totals];
     }
 
     private function ancestorAtLevel(Account $a, Collection $accounts, int $level): Account

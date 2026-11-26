@@ -72,6 +72,7 @@ class PostingService
             JournalLine::create([
                 'journal_entry_id' => $entry->id,
                 'account_id' => $l['account_id'],
+                'party_id' => $l['party_id'] ?? null,
                 'debit' => Money::fromCents($dr),
                 'credit' => Money::fromCents($cr),
                 'description' => $l['description'] ?? null,
@@ -114,7 +115,7 @@ class PostingService
             $period = $this->validate($entry);
 
             $type = match ($entry->type) {
-                'voucher' => null, // numbered by the voucher itself
+                'voucher', 'invoice' => null, // numbered by the source document
                 'reversal' => 'REV',
                 'opening' => 'OPN',
                 'closing' => 'CLS',
@@ -253,6 +254,7 @@ class PostingService
             ]);
             $this->replaceLines($rev, $entry->lines->map(fn ($l) => [
                 'account_id' => $l->account_id,
+                'party_id' => $l->party_id,
                 'debit' => $l->credit,
                 'credit' => $l->debit,
                 'description' => $l->description,

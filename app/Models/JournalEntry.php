@@ -13,7 +13,7 @@ class JournalEntry extends Model
 {
     public const STATUSES = ['draft' => 'مسودة', 'posted' => 'مرحّل', 'reversed' => 'معكوس'];
 
-    public const TYPES = ['manual' => 'قيد يدوي', 'voucher' => 'سند', 'reversal' => 'قيد عكسي', 'opening' => 'قيد افتتاحي', 'closing' => 'قيد إقفال'];
+    public const TYPES = ['manual' => 'قيد يدوي', 'voucher' => 'سند', 'invoice' => 'فاتورة', 'reversal' => 'قيد عكسي', 'opening' => 'قيد افتتاحي', 'closing' => 'قيد إقفال'];
 
     /** Only these columns may change once an entry has left draft. */
     private const MUTABLE_AFTER_POST = ['status', 'reversed_by_id', 'updated_at'];

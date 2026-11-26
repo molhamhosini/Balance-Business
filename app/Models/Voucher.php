@@ -38,6 +38,9 @@ class Voucher extends Model
     public function cashAccount(): BelongsTo { return $this->belongsTo(Account::class, 'cash_account_id'); }
     public function counterAccount(): BelongsTo { return $this->belongsTo(Account::class, 'counter_account_id'); }
     public function taxCode(): BelongsTo { return $this->belongsTo(TaxCode::class); }
+    public function party(): BelongsTo { return $this->belongsTo(Party::class); }
+    public function allocations(): \Illuminate\Database\Eloquent\Relations\HasMany { return $this->hasMany(Allocation::class); }
+    public function paysInvoice(): BelongsTo { return $this->belongsTo(Invoice::class, 'pays_invoice_id'); }
     public function journalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function poster(): BelongsTo { return $this->belongsTo(User::class, 'posted_by'); }

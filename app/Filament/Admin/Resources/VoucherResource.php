@@ -9,6 +9,7 @@ use App\Filament\Admin\Support\Options;
 use App\Models\AuditLog;
 use App\Models\TaxCode;
 use App\Models\Voucher;
+use App\Services\Accounting\InvoiceService;
 use App\Services\Accounting\VoucherService;
 use App\Support\Money;
 use App\Support\Perm;
@@ -61,8 +62,18 @@ class VoucherResource extends Resource
                 Forms\Components\DatePicker::make('date')->label(__('Accounting date'))->default(now())->required()->native(false)->displayFormat('Y-m-d'),
                 Forms\Components\Select::make('cash_account_id')->label(fn (Get $get) => $get('type') === 'payment' ? __('Paid from (cash / bank)') : __('Received into (cash / bank)'))
                     ->options(fn () => Options::cashAndBank())->searchable()->required(),
+                Forms\Components\Select::make('party_id')->label(__('Customer / supplier'))->searchable()->live()
+                    ->options(fn () => \App\Models\Party::where('company_id', Options::companyId())->where('is_active', true)->orderBy('type')->orderBy('code')->get()->mapWithKeys(fn ($p) => [$p->id => __(\App\Models\Party::TYPES[$p->type]).' · '.$p->label])->all())
+                    ->afterStateUpdated(function ($state, Forms\Set $set) {
+                        $p = $state ? \App\Models\Party::find($state) : null;
+                        if ($p) {
+                            $set('counter_account_id', $p->account_id);
+                            $set('party_name', $p->name);
+                        }
+                    })
+                    ->helperText(__('Optional. Settles invoices of this customer/supplier; the counter account becomes their control account.')),
                 Forms\Components\Select::make('counter_account_id')->label(fn (Get $get) => $get('type') === 'payment' ? __('Expense / supplier account') : __('Revenue / customer account'))
-                    ->options(fn () => Options::postableAccounts())->searchable()->required(),
+                    ->options(fn () => Options::postableAccounts())->searchable()->required()->disabled(fn (Get $get) => filled($get('party_id')))->dehydrated(),
                 Forms\Components\TextInput::make('party_name')->label(fn (Get $get) => $get('type') === 'payment' ? __('Paid to') : __('Received from')),
             ]),
             Forms\Components\Section::make(__('Amount'))->columns(4)->schema([
@@ -93,6 +104,9 @@ class VoucherResource extends Resource
                 Infolists\Components\ViewEntry::make('smart')->hiddenLabel()->view('filament.components.smart-buttons')->state(fn (Voucher $r) => array_values(array_filter([
                     $r->journalEntry ? ['icon' => 'heroicon-o-book-open', 'label' => __('Journal entry'), 'value' => $r->journalEntry->number, 'url' => JournalEntryResource::getUrl('view', ['record' => $r->journalEntry])] : null,
                     $r->journalEntry?->reversedBy ? ['icon' => 'heroicon-o-arrow-uturn-left', 'label' => __('Reversal entry'), 'value' => $r->journalEntry->reversedBy->number, 'url' => JournalEntryResource::getUrl('view', ['record' => $r->journalEntry->reversedBy])] : null,
+                    ...$r->allocations()->with('invoice')->get()->map(fn ($a) => ['icon' => 'heroicon-o-document-check', 'label' => __('Settles').' '.Money::format($a->amount), 'value' => $a->invoice->number,
+                        'url' => ($a->invoice->isSale() ? SalesInvoiceResource::class : PurchaseInvoiceResource::class)::getUrl('view', ['record' => $a->invoice])])->all(),
+                    $r->party_id && $r->status === 'posted' && ($left = app(InvoiceService::class)->unallocatedCents($r)) > 0 ? ['icon' => 'heroicon-o-exclamation-circle', 'label' => __('Unallocated (advance)'), 'value' => Money::format($left), 'url' => '#'] : null,
                     ['icon' => 'heroicon-o-printer', 'label' => __('Print'), 'value' => '', 'url' => route('voucher.print', $r)],
                 ]))),
                 Infolists\Components\ViewEntry::make('statusbar')->hiddenLabel()->view('filament.components.statusbar')
@@ -161,6 +175,23 @@ class VoucherResource extends Resource
             ->visible(fn (Voucher $record) => $record->status === 'draft' && auth()->user()->can(Perm::VOUCHERS_POST))
             ->requiresConfirmation()->modalDescription(__('Posting creates the journal entry automatically. A posted voucher can only be cancelled.'))
             ->action(fn (Voucher $record, $livewire) => static::attempt(fn () => app(VoucherService::class)->post($record, auth()->user()), __('Voucher posted')) && $livewire->refreshRecord());
+    }
+
+    /** Match a posted customer/supplier voucher to that party's open invoices. */
+    public static function allocateAction(): \Filament\Actions\Action
+    {
+        $open = fn (Voucher $v) => \App\Models\Invoice::where('party_id', $v->party_id)->where('status', 'posted')->where('payment', 'credit')
+            ->whereIn('kind', $v->type === 'receipt' ? ['sale', 'purchase_return'] : ['purchase', 'sale_return'])->orderBy('due_date')->get()->filter(fn ($i) => $i->openCents() > 0);
+
+        return \Filament\Actions\Action::make('allocate')->label(__('Allocate to invoices'))->icon('heroicon-o-link')->color('gray')
+            ->visible(fn (Voucher $record) => $record->status === 'posted' && $record->party_id && auth()->user()->can(Perm::VOUCHERS_POST) && app(InvoiceService::class)->unallocatedCents($record) > 0)
+            ->modalDescription(fn (Voucher $record) => __('Unallocated').': '.Money::format(app(InvoiceService::class)->unallocatedCents($record)))
+            ->form(fn (Voucher $record) => $open($record)->map(fn ($i) => Forms\Components\TextInput::make('inv_'.$i->id)->numeric()->minValue(0)
+                ->label($i->number.' · '.$i->date->format('Y-m-d').' · '.__('Amount due').' '.Money::format($i->openCents())))->values()->all() ?: [Forms\Components\Placeholder::make('none')->hiddenLabel()->content(__('No open invoices for this party.'))])
+            ->action(function (Voucher $record, array $data, $livewire) {
+                $amounts = collect($data)->filter(fn ($v, $k) => str_starts_with($k, 'inv_') && (float) $v > 0)->mapWithKeys(fn ($v, $k) => [(int) substr($k, 4) => (string) $v])->all();
+                static::attempt(fn () => app(InvoiceService::class)->allocate($record, $amounts, auth()->user()), __('Saved')) && $livewire->refreshRecord();
+            });
     }
 
     public static function cancelAction(): \Filament\Actions\Action

@@ -15,7 +15,7 @@ class AuditLog extends Model
     public const ACTIONS = [
         'created' => 'إنشاء', 'updated' => 'تعديل', 'deleted' => 'حذف مسودة', 'posted' => 'ترحيل',
         'reversed' => 'عكس', 'cancelled' => 'إلغاء', 'period_closed' => 'إقفال فترة',
-        'period_reopened' => 'إعادة فتح فترة', 'year_closed' => 'إقفال سنة', 'imported' => 'استيراد',
+        'period_reopened' => 'إعادة فتح فترة', 'year_closed' => 'إقفال سنة', 'imported' => 'استيراد', 'allocated' => 'تخصيص دفعة', 'deallocated' => 'إلغاء تخصيص', 'einvoice' => 'فوترة إلكترونية', 'credit_limit' => 'تجاوز حد الائتمان',
     ];
 
     protected $guarded = ['id'];

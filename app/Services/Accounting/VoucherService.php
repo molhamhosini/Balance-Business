@@ -89,6 +89,7 @@ class VoucherService
             $v->forceFill(['status' => 'posted', 'number' => $number, 'journal_entry_id' => $entry->id, 'posted_by' => $user->id, 'posted_at' => now()]);
             $v->saveQuietly(); // draft -> posted transition (guard is for changes after posting)
             AuditLog::record('posted', $v, ['status' => 'draft'], ['status' => 'posted', 'number' => $number, 'entry' => $entry->number]);
+            app(InvoiceService::class)->allocateLinked($v, $user);
 
             return $v;
         });
@@ -108,6 +109,10 @@ class VoucherService
                 throw new AccountingException(__('Only posted vouchers can be cancelled.'));
             }
             $this->posting->reverse($v->journalEntry, $user, $reason, $date, system: true);
+            foreach ($v->allocations as $a) {
+                AuditLog::record('deallocated', $a->invoice, ['voucher' => $v->number, 'amount' => $a->amount], null, $reason);
+                $a->delete();
+            }
             $v->status = 'cancelled';
             $v->save();
             AuditLog::record('cancelled', $v, ['status' => 'posted'], ['status' => 'cancelled'], $reason);
@@ -135,6 +140,13 @@ class VoucherService
         if ($v->counter_account_id === $v->cash_account_id) {
             throw new AccountingException(__('The counter account must differ from the cash account.'));
         }
+        if ($v->party_id) {
+            $party = $v->party;
+            if (! $party || $party->company_id !== $v->company_id) {
+                throw new AccountingException(__('Party does not belong to this company.'));
+            }
+            $v->counter_account_id = $party->account_id; // the party is a sub-ledger of its control account
+        }
         $code = $v->taxCode;
         if ($code && $code->type === 'standard') {
             $needed = $v->type === 'receipt' ? $code->output_account_id : $code->input_account_id;
@@ -152,7 +164,7 @@ class VoucherService
         $total = $net + $tax;
         $code = $v->taxCode;
         $desc = $v->description ?: $v->party_name;
-        $base = ['tax_code_id' => $code?->id, 'tax_direction' => $code ? ($v->type === 'receipt' ? 'sale' : 'purchase') : null];
+        $base = ['party_id' => $v->party_id, 'tax_code_id' => $code?->id, 'tax_direction' => $code ? ($v->type === 'receipt' ? 'sale' : 'purchase') : null];
 
         if ($v->type === 'receipt') {
             $lines = [

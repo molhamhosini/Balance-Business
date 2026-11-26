@@ -35,6 +35,8 @@ class Company extends Model implements HasCurrentTenantLabel
     public function taxCodes(): HasMany { return $this->hasMany(TaxCode::class); }
     public function journalEntries(): HasMany { return $this->hasMany(JournalEntry::class); }
     public function vouchers(): HasMany { return $this->hasMany(Voucher::class); }
+    public function parties(): HasMany { return $this->hasMany(Party::class); }
+    public function invoices(): HasMany { return $this->hasMany(Invoice::class); }
     public function auditLogs(): HasMany { return $this->hasMany(AuditLog::class); }
 
     public function systemAccount(string $key): ?Account

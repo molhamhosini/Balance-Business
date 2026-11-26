@@ -21,6 +21,7 @@ class ViewVoucher extends ViewRecord
         return [
             VoucherResource::postAction(),
             Actions\EditAction::make()->visible(fn () => VoucherResource::canEdit($this->record)),
+            VoucherResource::allocateAction(),
             VoucherResource::cancelAction(),
         ];
     }

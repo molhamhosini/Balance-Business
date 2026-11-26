@@ -28,6 +28,8 @@ class EditCompanyProfile extends EditTenantProfile
                 Forms\Components\TextInput::make('address')->label(__('Address')),
                 Forms\Components\FileUpload::make('logo_path')->label(__('Logo'))->image()->disk('public')->directory('logos'),
                 Forms\Components\TextInput::make('base_currency')->label(__('Base currency'))->default('AED')->length(3)->disabled(),
+                Forms\Components\Textarea::make('invoice_footer')->label(__('Invoice footer'))->rows(3)->columnSpanFull()
+                    ->helperText(__('Printed at the bottom of every invoice, e.g. bank account / IBAN and payment terms.')),
             ]),
             Forms\Components\Section::make(__('Controls'))->columns(3)->schema([
                 Forms\Components\Toggle::make('segregation_of_duties')->label(__('Whoever enters a document cannot post it'))->inline(false),

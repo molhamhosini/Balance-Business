@@ -23,6 +23,13 @@ final class Perm
     public const SETTINGS_MANAGE = 'settings.manage';
     public const USERS_MANAGE = 'users.manage';
     public const AUDIT_VIEW = 'audit.view';
+    public const PARTIES_MANAGE = 'parties.manage';
+    public const INVOICES_VIEW = 'invoices.view';
+    public const INVOICES_DRAFT = 'invoices.draft';
+    public const INVOICES_POST = 'invoices.post';
+    public const INVOICES_CANCEL = 'invoices.cancel';
+    public const CREDIT_LIMIT_OVERRIDE = 'invoices.credit_limit_override';
+    public const EINVOICE_MANAGE = 'einvoice.manage';
 
     public const LABELS = [
         self::ENTRIES_VIEW => 'عرض القيود',
@@ -43,13 +50,20 @@ final class Perm
         self::SETTINGS_MANAGE => 'الإعدادات العامة',
         self::USERS_MANAGE => 'إدارة المستخدمين والأدوار',
         self::AUDIT_VIEW => 'سجل التدقيق',
+        self::PARTIES_MANAGE => 'إدارة العملاء والموردين',
+        self::INVOICES_VIEW => 'عرض الفواتير',
+        self::INVOICES_DRAFT => 'إدخال مسودات الفواتير',
+        self::INVOICES_POST => 'اعتماد وترحيل الفواتير',
+        self::INVOICES_CANCEL => 'إلغاء الفواتير',
+        self::CREDIT_LIMIT_OVERRIDE => 'تجاوز حد الائتمان',
+        self::EINVOICE_MANAGE => 'الفوترة الإلكترونية',
     ];
 
     public const ROLES = [
-        'data_entry' => ['label' => 'مدخل بيانات', 'perms' => [self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::REPORTS_LIMITED]],
-        'accountant' => ['label' => 'محاسب', 'perms' => [self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::ENTRIES_POST, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::VOUCHERS_POST, self::ACCOUNTS_MANAGE, self::REPORTS_VIEW, self::REPORTS_LIMITED]],
-        'chief_accountant' => ['label' => 'رئيس الحسابات', 'perms' => [self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::ENTRIES_POST, self::ENTRIES_REVERSE, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::VOUCHERS_POST, self::VOUCHERS_CANCEL, self::VOUCHERS_OVER_LIMIT, self::ACCOUNTS_MANAGE, self::PERIODS_CLOSE, self::PERIODS_REOPEN, self::YEAR_CLOSE, self::REPORTS_VIEW, self::REPORTS_LIMITED, self::AUDIT_VIEW]],
-        'management' => ['label' => 'الإدارة', 'perms' => [self::ENTRIES_VIEW, self::VOUCHERS_VIEW, self::REPORTS_VIEW, self::REPORTS_LIMITED, self::AUDIT_VIEW]],
+        'data_entry' => ['label' => 'مدخل بيانات', 'perms' => [self::PARTIES_MANAGE, self::INVOICES_VIEW, self::INVOICES_DRAFT, self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::REPORTS_LIMITED]],
+        'accountant' => ['label' => 'محاسب', 'perms' => [self::PARTIES_MANAGE, self::INVOICES_VIEW, self::INVOICES_DRAFT, self::INVOICES_POST, self::EINVOICE_MANAGE, self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::ENTRIES_POST, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::VOUCHERS_POST, self::ACCOUNTS_MANAGE, self::REPORTS_VIEW, self::REPORTS_LIMITED]],
+        'chief_accountant' => ['label' => 'رئيس الحسابات', 'perms' => [self::PARTIES_MANAGE, self::INVOICES_VIEW, self::INVOICES_DRAFT, self::INVOICES_POST, self::INVOICES_CANCEL, self::CREDIT_LIMIT_OVERRIDE, self::EINVOICE_MANAGE, self::ENTRIES_VIEW, self::ENTRIES_DRAFT, self::ENTRIES_POST, self::ENTRIES_REVERSE, self::VOUCHERS_VIEW, self::VOUCHERS_DRAFT, self::VOUCHERS_POST, self::VOUCHERS_CANCEL, self::VOUCHERS_OVER_LIMIT, self::ACCOUNTS_MANAGE, self::PERIODS_CLOSE, self::PERIODS_REOPEN, self::YEAR_CLOSE, self::REPORTS_VIEW, self::REPORTS_LIMITED, self::AUDIT_VIEW]],
+        'management' => ['label' => 'الإدارة', 'perms' => [self::INVOICES_VIEW, self::ENTRIES_VIEW, self::VOUCHERS_VIEW, self::REPORTS_VIEW, self::REPORTS_LIMITED, self::AUDIT_VIEW]],
         'system_admin' => ['label' => 'مدير النظام', 'perms' => [self::SETTINGS_MANAGE, self::USERS_MANAGE]],
     ];
 }
