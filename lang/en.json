@@ -190,5 +190,6 @@
     "Total liabilities": "Total liabilities",
     "Total equity and liabilities": "Total equity and liabilities",
     "Profit / loss for the period (not yet closed)": "Profit / loss for the period (not yet closed)",
-    "Total :label": "Total :label"
+    "Total :label": "Total :label",
+    "Last price to this customer: :p (:d)": "Last price to this customer: :p (:d)"
 }

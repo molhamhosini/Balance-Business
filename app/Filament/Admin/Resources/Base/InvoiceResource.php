@@ -134,12 +134,19 @@ abstract class InvoiceResource extends Resource
                             ->datalist(fn (Get $get) => ($i = static::lineItem($get)) ? array_merge([$i->unit], $i->units->pluck('name')->all()) : [])
                             ->afterStateUpdated(function ($state, Get $get, Forms\Set $set) use ($sale) {
                                 $i = static::lineItem($get);
-                                if ($sale && $i) {
+                                if ($sale && $i && ($last = static::lastSalePrice($get('../../party_id'), $i->id, $state ?: $i->unit, $get('../../currency')))) {
+                                    $set('unit_price', $last['price']);
+                                } elseif ($sale && $i) {
                                     $u = $i->units->firstWhere('name', $state);
                                     $set('unit_price', $u && (float) $u->sale_price ? $u->sale_price : round((float) $i->sale_price * (float) $i->factorOf($state), 4));
                                 }
                             }),
-                        Forms\Components\TextInput::make('unit_price')->label(__('Unit price'))->numeric()->required()->columnSpan(2),
+                        Forms\Components\TextInput::make('unit_price')->label(__('Unit price'))->numeric()->required()->columnSpan(2)
+                            ->helperText(function (Get $get) use ($sale) {
+                                $last = $sale && $get('item_id') ? static::lastSalePrice($get('../../party_id'), (int) $get('item_id'), $get('unit') ?: null, $get('../../currency')) : null;
+
+                                return $last ? __('Last price to this customer: :p (:d)', ['p' => rtrim(rtrim(number_format($last['price'], 4, '.', ''), '0'), '.'), 'd' => $last['date']]) : null;
+                            }),
                         Forms\Components\Select::make('tax_code_id')->label(__('Tax'))->options(fn () => Options::taxCodes())->columnSpan(2)
                             ->default(fn (Get $get) => ($get('../../party_id') ? Party::whereKey($get('../../party_id'))->value('tax_code_id') : null)
                                 ?? TaxCode::where('company_id', Options::companyId())->where('code', 'SR')->value('id')),
@@ -157,6 +164,27 @@ abstract class InvoiceResource extends Resource
     }
 
     /** Selecting an item fills account, description, unit, price and tax (party classification wins). */
+    /**
+     * Last price this customer was charged for the item (posted sales invoices, same currency),
+     * optionally for a given unit. Prices differ per customer, so this beats the item's list price.
+     *
+     * @return array{price: float, unit: ?string, date: string}|null
+     */
+    public static function lastSalePrice($partyId, ?int $itemId, ?string $unit = null, ?string $currency = null): ?array
+    {
+        if (! $partyId || ! $itemId) {
+            return null;
+        }
+        $l = \App\Models\InvoiceLine::query()->join('invoices as i', 'i.id', '=', 'invoice_lines.invoice_id')
+            ->where('i.company_id', Options::companyId())->where('i.party_id', $partyId)->where('i.kind', 'sale')->where('i.status', 'posted')
+            ->where('i.currency', $currency ?: 'AED')->where('invoice_lines.item_id', $itemId)
+            ->when($unit, fn ($q, $u) => $q->where('invoice_lines.unit', $u))
+            ->orderByDesc('i.date')->orderByDesc('i.id')->orderByDesc('invoice_lines.id')
+            ->first(['invoice_lines.unit_price', 'invoice_lines.unit', 'i.date']);
+
+        return $l ? ['price' => (float) $l->unit_price, 'unit' => $l->unit, 'date' => substr((string) $l->date, 0, 10)] : null;
+    }
+
     public static function fillFromItem($itemId, Get $get, Forms\Set $set): void
     {
         $i = $itemId ? \App\Models\Item::find($itemId) : null;
@@ -170,7 +198,10 @@ abstract class InvoiceResource extends Resource
         }
         $set('description', $i->name);
         $set('unit', $i->unit);
-        if ($sale) {
+        if ($sale && ($last = static::lastSalePrice($get('../../party_id'), $i->id, null, $get('../../currency')))) {
+            $set('unit', $last['unit'] ?: $i->unit);
+            $set('unit_price', $last['price']);
+        } elseif ($sale) {
             $set('unit_price', (float) $i->sale_price);
         } elseif ($i->isStock() && (float) $i->avg_cost) {
             $set('unit_price', round((float) $i->avg_cost, 4));

@@ -763,5 +763,6 @@
     "Total liabilities": "إجمالي الخصوم",
     "Total equity and liabilities": "إجمالي حقوق الملكية والخصوم",
     "Profit / loss for the period (not yet closed)": "ربح / خسارة الفترة (غير مقفل)",
-    "Total :label": "إجمالي :label"
+    "Total :label": "إجمالي :label",
+    "Last price to this customer: :p (:d)": "آخر سعر لهذا العميل: :p (:d)"
 }
