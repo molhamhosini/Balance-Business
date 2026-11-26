@@ -119,6 +119,53 @@ class ScreensTest extends AccountingTestCase
             ->callMountedTableAction()->assertHasNoTableActionErrors();
     }
 
+    public function test_cheques_page_offers_new_received_and_issued_cheque(): void
+    {
+        $this->actingAs($this->chief);
+        $this->get(Resources\ChequeResource::getUrl('index', ['tenant' => $this->company]))
+            ->assertOk()->assertSee(__('New received cheque'))->assertSee(__('New issued cheque'));
+        $this->get(Resources\VoucherResource::getUrl('create', ['tenant' => $this->company, 'type' => 'payment', 'method' => 'cheque']))
+            ->assertOk()->assertSee('"type":"payment"')->assertSee('"payment_method":"cheque"');
+    }
+
+    public function test_every_report_exports_to_excel_and_pdf(): void
+    {
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+        $pages = collect(glob(app_path('Filament/Admin/Pages/*.php')))->map(fn ($f) => 'App\\Filament\\Admin\\Pages\\'.basename($f, '.php'))
+            ->filter(fn ($c) => is_subclass_of($c, \App\Filament\Admin\Pages\ReportPage::class) && ! (new \ReflectionClass($c))->isAbstract())->values();
+        $this->assertGreaterThanOrEqual(16, $pages->count());
+        foreach ($pages as $page) {
+            $lw = \Livewire\Livewire::test($page);
+            $this->assertNotNull($lw->instance()->downloadExcel(), $page.' excel');
+            $res = $lw->instance()->downloadPdf();
+            ob_start();
+            $res->sendContent();
+            $pdf = ob_get_clean();
+            $this->assertStringStartsWith('%PDF', $pdf, $page.' pdf');
+        }
+    }
+
+    public function test_report_can_be_sent_by_email_and_whatsapp(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+        \Livewire\Livewire::test(\App\Filament\Admin\Pages\TrialBalance::class)
+            ->callAction('sendEmail', ['to' => 'owner@example.com', 'message' => 'ميزان المراجعة', 'excel' => true])->assertHasNoActionErrors();
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ReportMail::class, fn ($m) => $m->hasTo('owner@example.com') && count($m->files) === 2);
+
+        \Livewire\Livewire::test(\App\Filament\Admin\Pages\PartyStatement::class)
+            ->callAction('sendWhatsapp', ['phone' => '0501234567', 'message' => 'كشف حساب'])->assertHasNoActionErrors();
+        $files = \Illuminate\Support\Facades\Storage::disk('local')->files('shared-reports');
+        $this->assertCount(1, $files);
+        $url = \Illuminate\Support\Facades\URL::temporarySignedRoute('report.shared', now()->addDay(), ['file' => basename($files[0]), 'name' => 'x.pdf']);
+        auth()->logout();
+        $this->get($url)->assertOk();
+        $this->get('/r/'.basename($files[0]))->assertForbidden();
+    }
+
     public function test_data_entry_cannot_open_trial_balance(): void
     {
         $this->actingAs($this->entry);

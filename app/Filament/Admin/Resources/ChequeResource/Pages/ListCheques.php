@@ -11,6 +11,18 @@ class ListCheques extends ListRecords
 {
     protected static string $resource = ChequeResource::class;
 
+    protected function getHeaderActions(): array
+    {
+        $can = \App\Filament\Admin\Resources\VoucherResource::canCreate();
+
+        return [
+            \Filament\Actions\Action::make('newReceived')->label(__('New received cheque'))->icon('heroicon-o-arrow-down-tray')->color('success')->visible($can)
+                ->url(\App\Filament\Admin\Resources\VoucherResource::getUrl('create', ['type' => 'receipt', 'method' => 'cheque'])),
+            \Filament\Actions\Action::make('newIssued')->label(__('New issued cheque'))->icon('heroicon-o-arrow-up-tray')->color('warning')->visible($can)
+                ->url(\App\Filament\Admin\Resources\VoucherResource::getUrl('create', ['type' => 'payment', 'method' => 'cheque'])),
+        ];
+    }
+
     public function getTabs(): array
     {
         return [

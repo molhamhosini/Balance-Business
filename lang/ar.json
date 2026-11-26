@@ -774,5 +774,14 @@
     "Period end date": "تاريخ نهاية الفترة",
     "Sets the inventory account to the value of the stock on hand at that date (quantities × weighted average cost) against cost of sales. Record the physical count first.": "يجعل رصيد حساب المخزون مساويًا لقيمة البضاعة الموجودة في هذا التاريخ (الكمية × متوسط التكلفة المرجّح)، والطرف المقابل تكلفة المبيعات. سجّل الجرد الفعلي أولًا.",
     "Closing stock adjustment posted": "رُحّلت تسوية مخزون آخر المدة",
-    "No difference: the inventory account already equals the stock value.": "لا يوجد فرق: رصيد حساب المخزون يساوي قيمة البضاعة."
+    "No difference: the inventory account already equals the stock value.": "لا يوجد فرق: رصيد حساب المخزون يساوي قيمة البضاعة.",
+    "Download PDF": "تنزيل PDF",
+    "Printed on": "طُبع في",
+    "Also attach the Excel file": "إرفاق ملف Excel أيضًا",
+    "Report sent to :to": "أُرسل التقرير إلى :to",
+    "Leave empty to choose the contact in WhatsApp.": "اتركه فارغًا لتختار جهة الاتصال من واتساب.",
+    "WhatsApp opens with the message and a link to the PDF (valid :d days). Press send there.": "سيفتح واتساب والرسالة جاهزة مع رابط لملف PDF (صالح :d يومًا)، اضغط إرسال هناك.",
+    "The report is attached.": "التقرير مرفق بهذا الإيميل.",
+    "New received cheque": "شيك وارد جديد",
+    "New issued cheque": "شيك صادر جديد"
 }

@@ -25,6 +25,13 @@ Route::get('/i/{invoice}', function (\App\Models\Invoice $invoice) {
     return view('print.invoice', ['inv' => $invoice->load(['company', 'branch', 'party', 'lines.taxCode', 'original'])]);
 })->middleware(['web', 'signed'])->name('invoice.shared');
 
+// Report PDF shared by WhatsApp: signed, expiring link to a generated file.
+Route::get('/r/{file}', function (string $file) {
+    abort_unless(preg_match('/^[0-9a-f-]{36}\.pdf$/', $file) && \Illuminate\Support\Facades\Storage::disk('local')->exists('shared-reports/'.$file), 404);
+
+    return \Illuminate\Support\Facades\Storage::disk('local')->download('shared-reports/'.$file, request('name', 'report.pdf'), ['Content-Type' => 'application/pdf']);
+})->middleware(['web', 'signed'])->name('report.shared');
+
 Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/invoices/{invoice}/print', function (\App\Models\Invoice $invoice) {
         abort_unless(auth()->user()->canAccessTenant($invoice->company) && auth()->user()->can(\App\Support\Perm::INVOICES_VIEW), 403);
