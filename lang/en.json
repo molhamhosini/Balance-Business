@@ -146,5 +146,14 @@
     "الأصول الثابتة": "Fixed assets",
     "الفواتير المفتوحة الافتتاحية": "Open invoices at go-live",
     "المخزون الافتتاحي": "Opening stock",
-    "Leave empty to number automatically.": "Leave empty to number automatically."
+    "Leave empty to number automatically.": "Leave empty to number automatically.",
+    "General ledger": "General ledger",
+    "Item movement by customer": "Item movement by customer",
+    "All customers": "All customers",
+    "All items": "All items",
+    "Summary by customer and item": "Summary by customer and item",
+    "Average price": "Average price",
+    "Net amount": "Net amount",
+    "No sales in this period.": "No sales in this period.",
+    "Invoice count": "Invoice count"
 }

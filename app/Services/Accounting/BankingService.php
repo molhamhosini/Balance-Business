@@ -56,9 +56,6 @@ class BankingService
             if ($t->status !== 'draft') {
                 throw new AccountingException(__('Only drafts can be posted.'));
             }
-            if ($t->company->segregation_of_duties && $t->created_by === $user->id) {
-                throw new AccountingException(__('Segregation of duties: the person who entered a document cannot post it.'));
-            }
             $amount = Money::fromCents(Money::toCents($t->amount));
             $desc = $t->description ?: __('Transfer').' '.$t->fromAccount->name_ar.' → '.$t->toAccount->name_ar;
             $entry = $this->posting->postGenerated($t, 'transfer', 'TRF', ['company_id' => $t->company_id, 'branch_id' => $t->branch_id, 'date' => $t->date->toDateString(), 'description' => $desc, 'reference' => $t->reference], [

@@ -187,9 +187,6 @@ class InvoiceService
             if ($inv->status !== 'draft') {
                 throw new AccountingException(__('Only draft invoices can be posted.'));
             }
-            if ($inv->company->segregation_of_duties && $inv->created_by === $user->id) {
-                throw new AccountingException(__('Segregation of duties: the person who entered a document cannot post it.'));
-            }
             if (! $user->canUseBranch($inv->branch)) {
                 throw new AccountingException(__('You are not allowed to work on this branch.'));
             }
@@ -449,7 +446,7 @@ class InvoiceService
 
     /**
      * Register a payment for an invoice: a voucher linked to the invoice. It is posted right away when the
-     * user may post it (and segregation of duties allows); otherwise it waits as a draft, and the
+     * user may post it; otherwise it waits as a draft, and the
      * allocation happens when it is posted.
      */
     public function registerPayment(Invoice $inv, array $data, User $user, VoucherService $vouchers): Voucher
@@ -471,7 +468,7 @@ class InvoiceService
                 'payment_method' => $data['payment_method'] ?? 'cash', 'cheque_number' => $data['cheque_number'] ?? null,
                 'description' => __('Payment of :n', ['n' => $inv->number]),
             ]), $user);
-            if ($user->can(Perm::VOUCHERS_POST) && ! $inv->company->segregation_of_duties) {
+            if ($user->can(Perm::VOUCHERS_POST)) {
                 $v = $vouchers->post($v, $user);
             }
 

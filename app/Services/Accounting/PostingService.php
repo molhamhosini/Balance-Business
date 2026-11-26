@@ -125,9 +125,6 @@ class PostingService
             if ($entry->status !== 'draft') {
                 throw new AccountingException(__('Only draft entries can be posted.'));
             }
-            if (! $system && $entry->company->segregation_of_duties && $entry->created_by === $user->id) {
-                throw new AccountingException(__('Segregation of duties: the person who entered a document cannot post it.'));
-            }
             if (! $user->canUseBranch($entry->branch)) {
                 throw new AccountingException(__('You are not allowed to work on this branch.'));
             }

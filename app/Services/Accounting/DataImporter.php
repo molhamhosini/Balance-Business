@@ -345,11 +345,7 @@ class DataImporter
             'account_id' => $counter, 'description' => __('Open invoice at go-live').' '.$r['number'], 'quantity' => 1, 'unit_price' => $amount,
             'tax_code_id' => TaxCode::where('company_id', $company->id)->where('code', 'OS')->value('id'),
         ]], $user);
-        if (! $company->segregation_of_duties) {
-            $this->invoices->post($inv, $user);
-        } else {
-            $res['drafts'][] = $inv->id;
-        }
+        $this->invoices->post($inv, $user);
 
         return 'created';
     }
@@ -382,11 +378,7 @@ class DataImporter
                 'warehouse_id' => $whId, 'counter_account_id' => $counter, 'description' => __('Imported from Excel'),
             ]), $lines, $user);
             $res['created'] += count($lines);
-            if (! $company->segregation_of_duties) {
-                $this->inventory->postDocument($doc, $user);
-            } else {
-                $res['drafts'][] = $doc->id;
-            }
+            $this->inventory->postDocument($doc, $user);
         }
 
         return $res;

@@ -12,14 +12,15 @@ use Livewire\Attributes\Url;
 class Ledger extends ReportPage
 {
     protected static ?string $navigationIcon = 'heroicon-o-document-magnifying-glass';
-    protected static ?int $navigationSort = 2;
     protected static string $view = 'filament.pages.ledger';
     protected static ?string $reportPermission = Perm::REPORTS_LIMITED;
 
     #[Url] public ?string $account = null;
 
-    public static function getNavigationLabel(): string { return __('Account statement'); }
-    public function getTitle(): string { return __('Account statement'); }
+    protected static ?int $navigationSort = 1;
+
+    public static function getNavigationLabel(): string { return __('General ledger'); }
+    public function getTitle(): string { return __('General ledger'); }
 
     public function mount(): void
     {

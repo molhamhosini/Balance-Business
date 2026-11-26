@@ -96,6 +96,36 @@ class Phase3Test extends AccountingTestCase
         $this->assertSame('posted', $this->sale($this->party('customer'), [['item_id' => $item->id, 'quantity' => '1', 'unit_price' => '10']])->status);
     }
 
+    public function test_item_movement_by_customer_filters_and_defaults_to_all(): void
+    {
+        $a = $this->item();
+        $b = $this->item(['name_ar' => 'لحم بقر']);
+        $this->doc('opening', [['item_id' => $a->id, 'quantity' => '100', 'unit_cost' => '20'], ['item_id' => $b->id, 'quantity' => '100', 'unit_cost' => '30']], ['counter_account_id' => $this->acc('3111')]);
+        $c1 = $this->party('customer');
+        $c2 = $this->party('customer');
+        $this->sale($c1, [['item_id' => $a->id, 'quantity' => '10', 'unit_price' => '40'], ['item_id' => $b->id, 'quantity' => '5', 'unit_price' => '60']]);
+        $this->sale($c2, [['item_id' => $a->id, 'quantity' => '3', 'unit_price' => '50']]);
+
+        \Filament\Facades\Filament::setTenant($this->company);
+        $page = new \App\Filament\Admin\Pages\ItemSalesByCustomer;
+        $page->from = '2026-11-01';
+        $page->to = '2026-11-30';
+        $this->assertCount(3, $page->tables()[1]['rows']); // nothing chosen: all customers, all items
+
+        $page->customer = (string) $c1->id;
+        $this->assertCount(2, $page->tables()[1]['rows']);
+        $page->item = (string) $a->id;
+        $rows = $page->tables()[1]['rows'];
+        $this->assertCount(1, $rows);
+        $this->assertSame(40000, $rows[0]['cells'][8]);
+
+        $page->customer = null; // item A for all customers
+        $sum = $page->tables()[0]['rows'];
+        $this->assertCount(3, $sum); // two customers + total
+        $this->assertSame(['q' => 13000], end($sum)['cells'][3]);
+        $this->assertSame(55000, end($sum)['cells'][6]);
+    }
+
     public function test_units_conversion_transfer_count_and_landed_cost(): void
     {
         $item = $this->item(['unit' => 'كغ']);
@@ -285,7 +315,6 @@ class Phase3Test extends AccountingTestCase
         $this->assertSame(2, $r['created'], json_encode($r['errors'], JSON_UNESCAPED_UNICODE));
         $this->assertSame('10.000000', (string) Item::where('code', 'P10')->first()->units->first()->factor);
 
-        $this->company->update(['segregation_of_duties' => false]);
         $r = $imp->import($this->company->fresh(), 'opening_stock', $file('opening_stock', [['item' => 'P10', 'quantity' => '200', 'unit_cost' => '30'], ['item' => 'S10', 'quantity' => '1', 'unit_cost' => '1']]),
             $this->chief, ['counter_account_id' => $this->acc('3111'), 'date' => '2026-11-01']);
         $this->assertSame(1, $r['created']);

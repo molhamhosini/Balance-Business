@@ -721,5 +721,14 @@
     "Usually an \"opening balances\" equity account; it is cleared when all opening balances are in.": "عادة حساب \"أرصدة افتتاحية\" ضمن حقوق الملكية، ويصبح صفراً بعد إدخال كل الأرصدة الافتتاحية.",
     "Warehouse :c not found.": "المستودع :c غير موجود.",
     "What to import": "نوع البيانات",
-    "Leave empty to number automatically.": "اتركه فارغًا ليُرقّم تلقائيًا."
+    "Leave empty to number automatically.": "اتركه فارغًا ليُرقّم تلقائيًا.",
+    "General ledger": "دفتر الأستاذ",
+    "Item movement by customer": "حركة صنف حسب العميل",
+    "All customers": "جميع العملاء",
+    "All items": "جميع الأصناف",
+    "Summary by customer and item": "ملخص حسب العميل والصنف",
+    "Average price": "متوسط السعر",
+    "Net amount": "المبلغ قبل الضريبة",
+    "No sales in this period.": "لا توجد مبيعات في هذه الفترة.",
+    "Invoice count": "عدد الفواتير"
 }

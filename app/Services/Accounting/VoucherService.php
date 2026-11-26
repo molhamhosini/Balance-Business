@@ -60,9 +60,6 @@ class VoucherService
                 throw new AccountingException(__('Only draft vouchers can be posted.'));
             }
             $company = $v->company;
-            if ($company->segregation_of_duties && $v->created_by === $user->id) {
-                throw new AccountingException(__('Segregation of duties: the person who entered a document cannot post it.'));
-            }
             if ($v->type === 'payment' && Money::toCents($v->total) > Money::toCents($company->voucher_approval_limit) && ! $user->can(Perm::VOUCHERS_OVER_LIMIT)) {
                 throw new AccountingException(__('This payment exceeds the approval limit of :l and needs the chief accountant.', ['l' => Money::format($company->voucher_approval_limit)]));
             }
