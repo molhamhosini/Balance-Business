@@ -166,12 +166,19 @@ class ReportService
     }
 
     /** Balance sheet at a date; current-year result shown as its own equity line. */
+    /**
+     * Statement of financial position (IAS 1): non-current and current assets; equity; non-current and
+     * current liabilities. Lines are level-3 accounts; the split comes from the level-2 heading
+     * (11xx / 21xx current, 12xx / 22xx non-current, or "غير متداول" / "non-current" in its name).
+     * The unclosed result of the year is shown inside equity.
+     */
     public function balanceSheet(Company $company, string $asOf, ?int $branchId = null): array
     {
         $accounts = Account::where('company_id', $company->id)->get()->keyBy('id');
         $sums = $this->sums($company, null, $asOf, $branchId);
         $groups = ['asset' => [], 'liability' => [], 'equity' => []];
         $tot = ['asset' => 0, 'liability' => 0, 'equity' => 0];
+        $parts = ['asset' => ['non_current' => 0, 'current' => 0], 'liability' => ['non_current' => 0, 'current' => 0]];
         $result = 0;
         foreach ($sums as $id => $s) {
             $a = $accounts[$id] ?? null;
@@ -185,17 +192,48 @@ class ReportService
             }
             $amount = $a->class === 'asset' ? $s['d'] - $s['c'] : $s['c'] - $s['d'];
             $head = $this->ancestorAtLevel($a, $accounts, 3);
-            $groups[$a->class][$head->code] ??= ['label' => $head->code.' '.$head->name, 'amount' => 0];
+            $term = $a->class === 'equity' ? null : $this->term($this->ancestorAtLevel($a, $accounts, 2));
+            $groups[$a->class][$head->code] ??= ['label' => $head->code.' '.$head->name, 'amount' => 0, 'term' => $term];
             $groups[$a->class][$head->code]['amount'] += $amount;
             $tot[$a->class] += $amount;
+            if ($term) {
+                $parts[$a->class][$term] += $amount;
+            }
         }
         foreach ($groups as &$g) {
             ksort($g);
         }
-        $groups['equity']['zzz'] = ['label' => __('Profit / loss not yet closed'), 'amount' => $result];
+        unset($g);
+        $groups['equity']['zzz'] = ['label' => __('Profit / loss for the period (not yet closed)'), 'amount' => $result, 'term' => null];
         $tot['equity'] += $result;
 
-        return ['groups' => $groups, 'totals' => $tot, 'balanced' => $tot['asset'] === $tot['liability'] + $tot['equity']];
+        $pick = fn (string $class, ?string $term) => array_filter($groups[$class], fn ($l) => $l['term'] === $term);
+        $sections = [
+            ['key' => 'nca', 'label' => __('Non-current assets'), 'lines' => $pick('asset', 'non_current'), 'total' => $parts['asset']['non_current']],
+            ['key' => 'ca', 'label' => __('Current assets'), 'lines' => $pick('asset', 'current'), 'total' => $parts['asset']['current']],
+            ['key' => 'ta', 'label' => __('Total assets'), 'total' => $tot['asset'], 'grand' => true],
+            ['key' => 'eq', 'label' => __('Equity'), 'lines' => $groups['equity'], 'total' => $tot['equity']],
+            ['key' => 'ncl', 'label' => __('Non-current liabilities'), 'lines' => $pick('liability', 'non_current'), 'total' => $parts['liability']['non_current']],
+            ['key' => 'cl', 'label' => __('Current liabilities'), 'lines' => $pick('liability', 'current'), 'total' => $parts['liability']['current']],
+            ['key' => 'tl', 'label' => __('Total liabilities'), 'total' => $tot['liability'], 'sub' => true],
+            ['key' => 'tle', 'label' => __('Total equity and liabilities'), 'total' => $tot['liability'] + $tot['equity'], 'grand' => true],
+        ];
+
+        return ['groups' => $groups, 'sections' => $sections, 'totals' => $tot, 'balanced' => $tot['asset'] === $tot['liability'] + $tot['equity']];
+    }
+
+    /** Current or non-current, from the level-2 heading of an asset / liability account. */
+    private function term(Account $heading): string
+    {
+        $name = $heading->name_ar.' '.$heading->name_en;
+        if (str_contains($name, 'غير متداول') || str_contains($name, 'غير المتداول') || stripos($name, 'non-current') !== false || stripos($name, 'non current') !== false) {
+            return 'non_current';
+        }
+        if (str_contains($name, 'متداول') || stripos($name, 'current') !== false) {
+            return 'current';
+        }
+
+        return ($heading->code[1] ?? '1') === '2' ? 'non_current' : 'current';
     }
 
     /**

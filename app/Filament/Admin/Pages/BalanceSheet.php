@@ -47,14 +47,21 @@ class BalanceSheet extends ReportPage
     {
         $d = $this->getData();
         $rows = [];
-        foreach (['asset' => __('Assets'), 'liability' => __('Liabilities'), 'equity' => __('Equity')] as $k => $label) {
-            $rows[] = [$label];
-            foreach ($d['cur']['groups'][$k] as $code => $g) {
-                $rows[] = ['  '.$g['label'], $g['amount'], $d['prev']['groups'][$k][$code]['amount'] ?? null];
+        $prev = $d['prev'] ? collect($d['prev']['sections'])->keyBy('key') : collect();
+        foreach ($d['cur']['sections'] as $sec) {
+            $ps = $prev[$sec['key']] ?? null;
+            if (isset($sec['lines'])) {
+                $rows[] = [$sec['label']];
+                foreach ($sec['lines'] as $code => $l) {
+                    $rows[] = ['  '.$l['label'], $l['amount'], $ps ? ($ps['lines'][$code]['amount'] ?? 0) : null];
+                }
+                $rows[] = [__('Total :label', ['label' => $sec['label']]), $sec['total'], $ps['total'] ?? null];
+            } else {
+                $rows[] = [$sec['label'], $sec['total'], $ps['total'] ?? null];
+                $rows[] = [];
             }
-            $rows[] = [__('Total').' '.$label, $d['cur']['totals'][$k], $d['prev']['totals'][$k] ?? null];
         }
 
-        return [['', $this->to, $this->compareTo], $rows];
+        return [['', substr((string) $this->to, 0, 10), substr((string) $this->compareTo, 0, 10)], $rows];
     }
 }

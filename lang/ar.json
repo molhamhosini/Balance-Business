@@ -753,5 +753,15 @@
     ":doc no. :n dated :d for :amount :cur.": "مرفق :doc رقم :n بتاريخ :d بمبلغ :amount :cur.",
     "Thank you.": "شكرًا لتعاملكم معنا.",
     "View and print the invoice": "عرض الفاتورة وطباعتها",
-    "The invoice is also attached. The link is valid for :d days.": "الفاتورة مرفقة أيضًا بهذا الإيميل، والرابط صالح لمدة :d يومًا."
+    "The invoice is also attached. The link is valid for :d days.": "الفاتورة مرفقة أيضًا بهذا الإيميل، والرابط صالح لمدة :d يومًا.",
+    "Statement of financial position": "قائمة المركز المالي",
+    "Non-current assets": "الأصول غير المتداولة",
+    "Current assets": "الأصول المتداولة",
+    "Total assets": "إجمالي الأصول",
+    "Non-current liabilities": "الخصوم غير المتداولة",
+    "Current liabilities": "الخصوم المتداولة",
+    "Total liabilities": "إجمالي الخصوم",
+    "Total equity and liabilities": "إجمالي حقوق الملكية والخصوم",
+    "Profit / loss for the period (not yet closed)": "ربح / خسارة الفترة (غير مقفل)",
+    "Total :label": "إجمالي :label"
 }
