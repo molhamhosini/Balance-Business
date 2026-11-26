@@ -170,6 +170,25 @@ class Phase3Test extends AccountingTestCase
         $this->get('/i/'.$inv->id)->assertForbidden();                         // unsigned link is refused
     }
 
+    public function test_last_sale_price_is_remembered_per_customer(): void
+    {
+        $item = $this->item(['sale_price' => '30']);
+        $this->doc('opening', [['item_id' => $item->id, 'quantity' => '100', 'unit_cost' => '20']], ['counter_account_id' => $this->acc('3111')]);
+        $c1 = $this->party('customer');
+        $c2 = $this->party('customer');
+        $this->sale($c1, [['item_id' => $item->id, 'quantity' => '5', 'unit_price' => '41']], ['date' => '2026-11-03']);
+        $this->sale($c1, [['item_id' => $item->id, 'quantity' => '5', 'unit_price' => '43.5']], ['date' => '2026-11-05']);
+        $this->sale($c2, [['item_id' => $item->id, 'quantity' => '5', 'unit_price' => '38']]);
+
+        \Filament\Facades\Filament::setTenant($this->company);
+        $r = \App\Filament\Admin\Resources\SalesInvoiceResource::class;
+        $this->assertSame(43.5, $r::lastSalePrice($c1->id, $item->id)['price']);
+        $this->assertSame('2026-11-05', $r::lastSalePrice($c1->id, $item->id)['date']);
+        $this->assertSame(38.0, $r::lastSalePrice($c2->id, $item->id)['price']);
+        $this->assertNull($r::lastSalePrice($this->party('customer')->id, $item->id)); // new customer: item list price is used
+        $this->assertNull($r::lastSalePrice($c1->id, $item->id, null, 'USD'));
+    }
+
     public function test_units_conversion_transfer_count_and_landed_cost(): void
     {
         $item = $this->item(['unit' => 'كغ']);
