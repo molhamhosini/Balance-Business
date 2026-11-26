@@ -146,6 +146,30 @@ class Phase3Test extends AccountingTestCase
         $this->assertSame(21000, $w->balances('supplier')['total']); // shown positive: we owe it
     }
 
+    public function test_send_invoice_by_email_and_whatsapp_with_signed_link(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $item = $this->item();
+        $this->doc('opening', [['item_id' => $item->id, 'quantity' => '10', 'unit_cost' => '20']], ['counter_account_id' => $this->acc('3111')]);
+        $c = $this->party('customer');
+        $inv = $this->sale($c, [['item_id' => $item->id, 'quantity' => '1', 'unit_price' => '100']]);
+        $svc = app(\App\Services\Accounting\InvoiceSharing::class);
+
+        $this->actingAs($this->accountant);
+        $svc->email($inv, 'buyer@example.com', null, $svc->defaultMessage($inv));
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\InvoiceMail::class, fn ($m) => $m->hasTo('buyer@example.com') && str_contains($m->link, '/i/'.$inv->id));
+        $this->assertSame(1, \App\Models\AuditLog::where('action', 'emailed')->where('auditable_id', $inv->id)->count());
+
+        $url = $svc->whatsappUrl($inv, '050 123 4567', 'مرحبا');
+        $this->assertStringStartsWith('https://wa.me/971501234567?text=', $url);
+        $this->assertSame('971501234567', $svc::normalizePhone('+971 50 123 4567'));
+        $this->assertSame('971501234567', $svc::normalizePhone('00971501234567'));
+
+        auth()->logout();
+        $this->get($svc->link($inv))->assertOk()->assertSee($inv->number);   // customer opens the link without logging in
+        $this->get('/i/'.$inv->id)->assertForbidden();                         // unsigned link is refused
+    }
+
     public function test_units_conversion_transfer_count_and_landed_cost(): void
     {
         $item = $this->item(['unit' => 'كغ']);

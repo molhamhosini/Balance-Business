@@ -22,6 +22,7 @@ abstract class ViewInvoice extends ViewRecord
             $r::writeOffAction(),
             Actions\EditAction::make()->visible(fn () => $r::canEdit($this->record)),
             $r::creditNoteAction(),
+            $r::sendActions(),
             $r::einvoiceActions(),
             $r::cancelAction(),
         ];
