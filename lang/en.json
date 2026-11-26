@@ -203,5 +203,9 @@
     "Period end date": "Period end date",
     "Sets the inventory account to the value of the stock on hand at that date (quantities × weighted average cost) against cost of sales. Record the physical count first.": "Sets the inventory account to the value of the stock on hand at that date (quantities × weighted average cost) against cost of sales. Record the physical count first.",
     "Closing stock adjustment posted": "Closing stock adjustment posted",
-    "No difference: the inventory account already equals the stock value.": "No difference: the inventory account already equals the stock value."
+    "No difference: the inventory account already equals the stock value.": "No difference: the inventory account already equals the stock value.",
+    "Download PDF": "Download PDF",
+    "Print": "Print",
+    "Printed on": "Printed on",
+    "As of": "As of"
 }

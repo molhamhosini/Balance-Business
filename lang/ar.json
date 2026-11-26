@@ -774,5 +774,7 @@
     "Period end date": "تاريخ نهاية الفترة",
     "Sets the inventory account to the value of the stock on hand at that date (quantities × weighted average cost) against cost of sales. Record the physical count first.": "يجعل رصيد حساب المخزون مساويًا لقيمة البضاعة الموجودة في هذا التاريخ (الكمية × متوسط التكلفة المرجّح)، والطرف المقابل تكلفة المبيعات. سجّل الجرد الفعلي أولًا.",
     "Closing stock adjustment posted": "رُحّلت تسوية مخزون آخر المدة",
-    "No difference: the inventory account already equals the stock value.": "لا يوجد فرق: رصيد حساب المخزون يساوي قيمة البضاعة."
+    "No difference: the inventory account already equals the stock value.": "لا يوجد فرق: رصيد حساب المخزون يساوي قيمة البضاعة.",
+    "Download PDF": "تنزيل PDF",
+    "Printed on": "طُبع في"
 }

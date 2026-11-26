@@ -119,6 +119,24 @@ class ScreensTest extends AccountingTestCase
             ->callMountedTableAction()->assertHasNoTableActionErrors();
     }
 
+    public function test_every_report_exports_to_excel_and_pdf(): void
+    {
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+        $pages = collect(glob(app_path('Filament/Admin/Pages/*.php')))->map(fn ($f) => 'App\\Filament\\Admin\\Pages\\'.basename($f, '.php'))
+            ->filter(fn ($c) => is_subclass_of($c, \App\Filament\Admin\Pages\ReportPage::class) && ! (new \ReflectionClass($c))->isAbstract())->values();
+        $this->assertGreaterThanOrEqual(16, $pages->count());
+        foreach ($pages as $page) {
+            $lw = \Livewire\Livewire::test($page);
+            $this->assertNotNull($lw->instance()->downloadExcel(), $page.' excel');
+            $res = $lw->instance()->downloadPdf();
+            ob_start();
+            $res->sendContent();
+            $pdf = ob_get_clean();
+            $this->assertStringStartsWith('%PDF', $pdf, $page.' pdf');
+        }
+    }
+
     public function test_data_entry_cannot_open_trial_balance(): void
     {
         $this->actingAs($this->entry);

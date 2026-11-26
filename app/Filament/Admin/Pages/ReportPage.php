@@ -99,8 +99,65 @@ abstract class ReportPage extends Page implements HasForms
     {
         return [
             Action::make('excel')->label(__('Export to Excel'))->icon('heroicon-o-table-cells')->color('gray')->action(fn () => $this->downloadExcel()),
-            Action::make('print')->label(__('Print / PDF'))->icon('heroicon-o-printer')->color('gray')->alpineClickHandler('window.print()'),
+            Action::make('pdf')->label(__('Download PDF'))->icon('heroicon-o-document-arrow-down')->color('gray')->action(fn () => $this->downloadPdf()),
+            Action::make('print')->label(__('Print'))->icon('heroicon-o-printer')->color('gray')->alpineClickHandler('window.print()'),
         ];
+    }
+
+    /** Period / date line under the title. */
+    protected function exportSubtitle(): string
+    {
+        $parts = [];
+        if ($this->from && array_key_exists('from', $this->formState())) {
+            $parts[] = __('From').' '.substr((string) $this->from, 0, 10).' '.__('To').' '.substr((string) $this->to, 0, 10);
+        } elseif ($this->to) {
+            $parts[] = __('As of').' '.substr((string) $this->to, 0, 10);
+        }
+        if ($this->branch) {
+            $parts[] = __('Branch').': '.\App\Models\Branch::find($this->branch)?->name;
+        }
+        if ($this->cc) {
+            $parts[] = __('Cost center').': '.\App\Models\CostCenter::find($this->cc)?->label;
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    /** PDF built from the same rows as the Excel export (pure PHP, Arabic shaping and RTL). */
+    public function downloadPdf()
+    {
+        [$headers, $rows] = $this->exportRows();
+        $numericCol = [];
+        $out = [];
+        foreach ($rows as $row) {
+            $cells = [];
+            foreach (array_values($row) as $i => $v) {
+                $isNum = is_int($v) || is_float($v);
+                if ($isNum) {
+                    $numericCol[$i] = true;
+                }
+                $cells[] = ['t' => is_int($v) ? ($v === 0 ? '' : \App\Support\Money::format($v)) : (is_float($v) ? number_format($v, 3) : (string) $v), 'n' => $isNum];
+            }
+            $first = (string) ($row[array_key_first($row) ?? 0] ?? '');
+            $bold = count($row) === 1 || str_starts_with(trim($first), __('Total')) || str_starts_with(trim($first), 'Total');
+            $out[] = ['cells' => $cells ?: [['t' => ' ', 'n' => false]], 'bold' => $bold];
+        }
+        $html = view('pdf.report', [
+            'company' => $this->company()->name, 'title' => strip_tags((string) $this->getTitle()), 'subtitle' => $this->exportSubtitle(),
+            'headers' => $headers, 'rows' => $out, 'numeric' => array_keys($numericCol),
+        ])->render();
+
+        @mkdir(storage_path('framework/cache/mpdf'), 0775, true);
+        $mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => count($headers) > 6 ? 'A4-L' : 'A4', 'tempDir' => storage_path('framework/cache/mpdf'),
+            'margin_top' => 10, 'margin_bottom' => 12, 'margin_left' => 8, 'margin_right' => 8]);
+        $mpdf->autoScriptToLang = true;
+        $mpdf->autoLangToFont = true;
+        $mpdf->SetDirectionality(app()->getLocale() === 'ar' ? 'rtl' : 'ltr');
+        $mpdf->setFooter('{PAGENO} / {nbpg}');
+        $mpdf->WriteHTML($html);
+        $file = str($this->getTitle())->slug().'-'.substr((string) ($this->to ?? now()->toDateString()), 0, 10).'.pdf';
+
+        return response()->streamDownload(fn () => print ($mpdf->Output('', 'S')), $file, ['Content-Type' => 'application/pdf']);
     }
 
     public function downloadExcel()
@@ -109,8 +166,8 @@ abstract class ReportPage extends Page implements HasForms
         $book = new Spreadsheet;
         $sheet = $book->getActiveSheet();
         $sheet->setRightToLeft(app()->getLocale() === 'ar');
-        $sheet->setTitle(mb_substr(strip_tags((string) $this->getTitle()), 0, 30));
-        $sub = __('From').' '.$this->from.' '.__('To').' '.$this->to.($this->cc ? ' · '.__('Cost center').': '.\App\Models\CostCenter::find($this->cc)?->label : '');
+        $sheet->setTitle(mb_substr(trim(str_replace(['\\', '/', '?', '*', ':', '[', ']'], '-', strip_tags((string) $this->getTitle())), " '"), 0, 30));
+        $sub = $this->exportSubtitle();
         $sheet->fromArray([[$this->company()->name.' — '.$this->getTitle()], [$sub], $headers], null, 'A1');
         $r = 4;
         foreach ($rows as $row) {
