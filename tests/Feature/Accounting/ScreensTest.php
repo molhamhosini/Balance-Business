@@ -119,6 +119,15 @@ class ScreensTest extends AccountingTestCase
             ->callMountedTableAction()->assertHasNoTableActionErrors();
     }
 
+    public function test_cheques_page_offers_new_received_and_issued_cheque(): void
+    {
+        $this->actingAs($this->chief);
+        $this->get(Resources\ChequeResource::getUrl('index', ['tenant' => $this->company]))
+            ->assertOk()->assertSee(__('New received cheque'))->assertSee(__('New issued cheque'));
+        $this->get(Resources\VoucherResource::getUrl('create', ['tenant' => $this->company, 'type' => 'payment', 'method' => 'cheque']))
+            ->assertOk()->assertSee('"type":"payment"')->assertSee('"payment_method":"cheque"');
+    }
+
     public function test_every_report_exports_to_excel_and_pdf(): void
     {
         $this->actingAs($this->chief);

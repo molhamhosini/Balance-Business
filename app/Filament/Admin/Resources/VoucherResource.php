@@ -82,7 +82,7 @@ class VoucherResource extends Resource
                     ->default(fn () => TaxCode::where('company_id', Options::companyId())->where('code', 'OS')->value('id')),
                 Forms\Components\Placeholder::make('vat_preview')->label(__('VAT'))->content(fn (Get $get) => Money::format(static::previewTax($get))),
                 Forms\Components\Placeholder::make('total_preview')->label(__('Total'))->content(fn (Get $get) => Money::format(Money::toCents($get('amount') ?: 0) + static::previewTax($get))),
-                Forms\Components\Select::make('payment_method')->label(__('Payment method'))->options(fn () => collect(Voucher::METHODS)->map(fn ($l) => __($l))->all())->default('cash')->live()->required(),
+                Forms\Components\Select::make('payment_method')->label(__('Payment method'))->options(fn () => collect(Voucher::METHODS)->map(fn ($l) => __($l))->all())->default(fn () => array_key_exists((string) request('method'), Voucher::METHODS) ? request('method') : 'cash')->live()->required(),
                 Forms\Components\TextInput::make('cheque_number')->label(__('Cheque number'))->visible(fn (Get $get) => $get('payment_method') === 'cheque')->required(fn (Get $get) => $get('payment_method') === 'cheque'),
                 Forms\Components\TextInput::make('cheque_bank')->label(__('Drawn on bank'))->visible(fn (Get $get) => $get('payment_method') === 'cheque'),
                 Forms\Components\DatePicker::make('cheque_due_date')->label(__('Cheque due date'))->visible(fn (Get $get) => $get('payment_method') === 'cheque'),

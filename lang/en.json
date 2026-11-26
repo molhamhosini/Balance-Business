@@ -212,5 +212,7 @@
     "Report sent to :to": "Report sent to :to",
     "Leave empty to choose the contact in WhatsApp.": "Leave empty to choose the contact in WhatsApp.",
     "WhatsApp opens with the message and a link to the PDF (valid :d days). Press send there.": "WhatsApp opens with the message and a link to the PDF (valid :d days). Press send there.",
-    "The report is attached.": "The report is attached."
+    "The report is attached.": "The report is attached.",
+    "New received cheque": "New received cheque",
+    "New issued cheque": "New issued cheque"
 }
