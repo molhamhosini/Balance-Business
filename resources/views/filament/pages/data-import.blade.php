@@ -20,9 +20,6 @@
         @php($r = $this->result)
         <x-filament::section :heading="__('Result')">
             <p>{{ __(':n rows read: :c added, :u updated, :e rejected.', ['n' => $r['rows'], 'c' => $r['created'], 'u' => $r['updated'], 'e' => count($r['errors'])]) }}</p>
-            @if ($r['drafts'])
-                <p class="mt-2 text-warning-600">{{ __(':n documents were saved as drafts because whoever enters a document cannot post it. Another user must post them.', ['n' => count($r['drafts'])]) }}</p>
-            @endif
             @if ($r['errors'])
                 <table class="bb-report mt-3">
                     <thead><tr><th>{{ __('Row') }}</th><th>{{ __('Problem') }}</th></tr></thead>

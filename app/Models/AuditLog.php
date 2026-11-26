@@ -16,7 +16,7 @@ class AuditLog extends Model
         'created' => 'إنشاء', 'updated' => 'تعديل', 'deleted' => 'حذف مسودة', 'posted' => 'ترحيل',
         'reversed' => 'عكس', 'cancelled' => 'إلغاء', 'period_closed' => 'إقفال فترة',
         'period_reopened' => 'إعادة فتح فترة', 'year_closed' => 'إقفال سنة', 'imported' => 'استيراد', 'allocated' => 'تخصيص دفعة', 'deallocated' => 'إلغاء تخصيص', 'einvoice' => 'فوترة إلكترونية', 'credit_limit' => 'تجاوز حد الائتمان',
-        'cheque_deposited' => 'إيداع شيك', 'cheque_cleared' => 'صرف شيك', 'cheque_returned' => 'شيك مرتجع', 'disposed' => 'استبعاد أصل', 'reconciled' => 'اعتماد تسوية بنكية',
+        'cheque_deposited' => 'إيداع شيك', 'cheque_cleared' => 'صرف شيك', 'cheque_returned' => 'شيك مرتجع', 'disposed' => 'استبعاد أصل', 'reconciled' => 'اعتماد تسوية بنكية', 'emailed' => 'إرسال بالإيميل', 'whatsapp' => 'إرسال واتساب',
     ];
 
     protected $guarded = ['id'];

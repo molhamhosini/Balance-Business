@@ -18,6 +18,13 @@ Route::get('/vouchers/{voucher}/print', function (\App\Models\Voucher $voucher) 
     return view('print.voucher', ['v' => $voucher->load(['company', 'branch', 'cashAccount', 'counterAccount', 'taxCode', 'creator', 'poster'])]);
 })->middleware(['web', 'auth'])->name('voucher.print');
 
+// Link sent to the customer by email / WhatsApp: no login, protected by a signed, expiring URL.
+Route::get('/i/{invoice}', function (\App\Models\Invoice $invoice) {
+    abort_unless($invoice->status === 'posted' && $invoice->isSale(), 404);
+
+    return view('print.invoice', ['inv' => $invoice->load(['company', 'branch', 'party', 'lines.taxCode', 'original'])]);
+})->middleware(['web', 'signed'])->name('invoice.shared');
+
 Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/invoices/{invoice}/print', function (\App\Models\Invoice $invoice) {
         abort_unless(auth()->user()->canAccessTenant($invoice->company) && auth()->user()->can(\App\Support\Perm::INVOICES_VIEW), 403);

@@ -146,7 +146,7 @@ class InvoicingTest extends AccountingTestCase
         $c = $this->party('customer');
         $inv = $this->invoices()->post($this->invoice('sale', $c, [$this->line('4111', '1', '1000')]), $this->accountant);
         $v = $this->invoices()->registerPayment($inv, ['date' => '2026-11-20', 'cash_account_id' => $this->acc('1114'), 'amount' => '400'], $this->entry, $this->vouchers());
-        $this->assertSame('draft', $v->status); // segregation of duties: someone else posts it
+        $this->assertSame('draft', $v->status); // data entry may not post vouchers: someone else posts it
         $v = $this->vouchers()->post($v, $this->accountant);
         $this->assertSame('RV-2026-00001', $v->number);
         $this->assertSame($c->id, $v->journalEntry->lines->firstWhere('account_id', $this->acc('1131'))->party_id);

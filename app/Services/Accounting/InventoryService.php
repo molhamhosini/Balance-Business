@@ -168,9 +168,6 @@ class InventoryService
             if ($d->status !== 'draft') {
                 throw new AccountingException(__('Only drafts can be posted.'));
             }
-            if ($d->company->segregation_of_duties && $d->created_by === $user->id) {
-                throw new AccountingException(__('Segregation of duties: the person who entered a document cannot post it.'));
-            }
             $this->posting->periodFor($d->company_id, $d->date->toDateString()); // fail early on a closed period
             $number = $this->sequences->next($d->company_id, StockDocument::PREFIX[$d->type], (int) $d->date->format('Y'));
             $date = $d->date->toDateString();

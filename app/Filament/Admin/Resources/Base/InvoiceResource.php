@@ -375,6 +375,51 @@ abstract class InvoiceResource extends Resource
             ->action(fn (Invoice $record, array $data, $livewire) => static::attempt(fn () => app(InvoiceService::class)->cancel($record, auth()->user(), $data['reason']), __('Invoice cancelled')) && $livewire->refreshRecord());
     }
 
+    /** Send the posted sales document to the customer: email (saved address) or WhatsApp (saved phone). */
+    public static function sendActions(): \Filament\Actions\ActionGroup
+    {
+        $sendable = fn (?Model $record) => $record instanceof Invoice && $record->status === 'posted' && $record->isSale();
+        $sharing = fn () => app(\App\Services\Accounting\InvoiceSharing::class);
+
+        return \Filament\Actions\ActionGroup::make([
+            Action::make('sendEmail')->label(__('Send by email'))->icon('heroicon-o-envelope')->visible($sendable)
+                ->fillForm(fn (Invoice $record) => ['to' => $record->party?->email, 'message' => $sharing()->defaultMessage($record)])
+                ->form([
+                    Forms\Components\TextInput::make('to')->label(__('To'))->email()->required()
+                        ->helperText(fn (Invoice $record) => $record->party?->email ? null : __('No email saved for this customer. It is saved on the customer card when you send.')),
+                    Forms\Components\TextInput::make('cc')->label(__('Cc'))->placeholder('a@x.com, b@y.com'),
+                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(5)->required(),
+                ])
+                ->modalSubmitActionLabel(__('Send'))
+                ->action(function (Invoice $record, array $data) use ($sharing) {
+                    try {
+                        $sharing()->email($record, $data['to'], $data['cc'] ?? null, $data['message']);
+                        if ($record->party && blank($record->party->email)) {
+                            $record->party->update(['email' => $data['to']]);
+                        }
+                        Notification::make()->success()->title(__('Invoice sent to :to', ['to' => $data['to']]))->send();
+                    } catch (\Throwable $e) {
+                        report($e);
+                        Notification::make()->danger()->title(__('The email could not be sent'))->body(__('Check the mail settings (MAIL_*) in the .env file.').' '.$e->getMessage())->persistent()->send();
+                    }
+                }),
+            Action::make('sendWhatsapp')->label(__('Send by WhatsApp'))->icon('heroicon-o-chat-bubble-left-right')->visible($sendable)
+                ->fillForm(fn (Invoice $record) => ['phone' => $record->party?->phone, 'message' => $sharing()->defaultMessage($record)])
+                ->form([
+                    Forms\Components\TextInput::make('phone')->label(__('WhatsApp number'))->tel()->required()->helperText(__('Example: 0501234567 or +971501234567')),
+                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(5)->required(),
+                ])
+                ->modalDescription(__('WhatsApp opens in a new tab with the message and the invoice link ready. Press send there.'))
+                ->modalSubmitActionLabel(__('Open WhatsApp'))
+                ->action(function (Invoice $record, array $data, $livewire) use ($sharing) {
+                    if ($record->party && blank($record->party->phone)) {
+                        $record->party->update(['phone' => $data['phone']]);
+                    }
+                    $livewire->js('window.open('.json_encode($sharing()->whatsappUrl($record, $data['phone'], $data['message'])).', "_blank")');
+                }),
+        ])->label(__('Send'))->icon('heroicon-o-paper-airplane')->button()->color('success');
+    }
+
     public static function einvoiceActions(): \Filament\Actions\ActionGroup
     {
         $issuable = fn (?Model $record) => $record instanceof Invoice && $record->status === 'posted' && $record->isSale();

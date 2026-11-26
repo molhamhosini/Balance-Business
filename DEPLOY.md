@@ -42,6 +42,23 @@ ln -s app/public public_html
 6. سجّل الدخول على `https://YOUR-DOMAIN/admin` بحساب `admin@example.com` وغيّر كلمات المرور، ثم من
    **إعدادات الشركة** أدخل الاسم والرقم الضريبي والشعار لكل شركة، ومن **الفروع** تأكد من الإمارة.
 
+## إرسال الفواتير بالإيميل
+
+أنشئ بريدًا من **hPanel ← Emails** (مثل `invoices@YOUR-DOMAIN`) ثم أضف إلى `.env`:
+
+```
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.hostinger.com
+MAIL_PORT=465
+MAIL_SCHEME=smtps
+MAIL_USERNAME=invoices@YOUR-DOMAIN
+MAIL_PASSWORD="كلمة مرور البريد"
+MAIL_FROM_ADDRESS=invoices@YOUR-DOMAIN
+MAIL_FROM_NAME="اسم الشركة"
+```
+
+ثم `php artisan config:clear && php artisan optimize`. الإرسال عبر واتساب لا يحتاج أي إعداد: يفتح واتساب ويب أو التطبيق والرسالة جاهزة.
+
 ## التحديثات
 
 ```bash

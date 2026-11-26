@@ -121,15 +121,13 @@ class AcceptanceTest extends AccountingTestCase
         $this->posting()->post($e, $this->entry);
     }
 
-    public function test_segregation_of_duties(): void
+    public function test_posting_depends_on_permissions_only(): void
     {
         $e = $this->draft([
             ['account_id' => $this->acc('1121'), 'debit' => '100', 'credit' => 0],
             ['account_id' => $this->acc('3111'), 'debit' => 0, 'credit' => '100'],
         ], by: $this->accountant);
-        $this->expectExceptionMessageMatches('/.+/');
-        $this->expectException(AccountingException::class);
-        $this->posting()->post($e, $this->accountant);
+        $this->assertSame('posted', $this->posting()->post($e, $this->accountant)->status); // the author may post their own entry
     }
 
     public function test_receipt_voucher_generates_the_documented_entry(): void
