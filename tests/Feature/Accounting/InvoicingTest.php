@@ -61,6 +61,50 @@ class InvoicingTest extends AccountingTestCase
         $this->assertSame(20000, $vat['4']['amount']);
     }
 
+    public function test_quotation_is_numbered_never_posts_and_converts_to_a_draft_invoice(): void
+    {
+        $c = $this->party('customer');
+        $q = $this->invoice('quotation', $c, [$this->line('4111', '10', '50')]);
+        $this->assertSame('QT-2026-00001', $q->number);
+        $this->assertSame('draft', $q->status);
+        $this->assertSame('2026-12-05', $q->due_date->toDateString()); // valid 30 days
+        $this->assertNull($q->journal_entry_id);
+        $this->assertSame(0, $c->balance());
+        $this->assertTrue($q->isSendable());
+
+        try {
+            $this->invoices()->post($q, $this->accountant);
+            $this->fail('A quotation must not post.');
+        } catch (\App\Exceptions\AccountingException) {
+        }
+
+        $q = $this->invoices()->markQuotationSent($q, $this->entry);
+        $this->assertSame('sent', $q->status);
+        $q = $this->invoices()->saveDraft($q->fresh(), [$this->line('4111', '12', '50')], $this->entry); // still editable once sent
+        $this->assertSame('sent', $q->status);
+        $this->assertSame('QT-2026-00001', $q->number);
+        $this->assertSame('630.00', $q->total);
+
+        $inv = $this->invoices()->convertQuotation($q, $this->entry);
+        $this->assertSame('sale', $inv->kind);
+        $this->assertSame('draft', $inv->status);
+        $this->assertSame($q->id, $inv->quotation_id);
+        $this->assertSame('630.00', $inv->total);
+        $this->assertSame('converted', $q->fresh()->status);
+        $this->expectException(\App\Exceptions\AccountingException::class);
+        $this->invoices()->saveDraft($q->fresh(), [$this->line('4111', '1', '1')], $this->entry);
+    }
+
+    public function test_quotation_can_be_cancelled_and_not_converted_after(): void
+    {
+        $q = $this->invoice('quotation', $this->party('customer'), [$this->line('4111', '1', '100')]);
+        $this->invoices()->cancelQuotation($q, $this->entry, 'السعر تغير');
+        $this->assertSame('cancelled', $q->fresh()->status);
+        $this->assertFalse($q->fresh()->isSendable());
+        $this->expectException(\App\Exceptions\AccountingException::class);
+        $this->invoices()->convertQuotation($q->fresh(), $this->entry);
+    }
+
     public function test_cash_sale_debits_the_cash_box(): void
     {
         $inv = $this->invoice('sale', $this->party('customer'), [$this->line('4113', '2', '50')], ['payment' => 'cash', 'cash_account_id' => $this->acc('1111')]);

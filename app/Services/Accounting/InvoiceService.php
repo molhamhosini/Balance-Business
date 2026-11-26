@@ -33,6 +33,9 @@ class InvoiceService
     /** Warnings raised while posting (e.g. credit limit exceeded in "warn" mode). */
     public array $warnings = [];
 
+    /** A quotation is valid for this many days unless the user sets "valid until". */
+    public const QUOTATION_VALID_DAYS = 30;
+
     public function __construct(private PostingService $posting, private SequenceService $sequences, private InventoryService $inventory) {}
 
     /** Line amounts in fils: [net, tax, total] (reverse-charge tax is not added to the total). */
@@ -62,8 +65,9 @@ class InvoiceService
     public function saveDraft(Invoice $inv, array $lines, User $user): Invoice
     {
         $this->posting->authorize($user, Perm::INVOICES_DRAFT);
-        if ($inv->exists && $inv->getOriginal('status') !== 'draft') {
-            throw new AccountingException(__('A posted invoice cannot be modified. Issue a credit note instead.'));
+        $editable = $inv->kind === 'quotation' ? ['draft', 'sent'] : ['draft'];
+        if ($inv->exists && ! in_array($inv->getOriginal('status'), $editable, true)) {
+            throw new AccountingException($inv->kind === 'quotation' ? __('A converted or cancelled quotation cannot be modified.') : __('A posted invoice cannot be modified. Issue a credit note instead.'));
         }
         $this->validateHeader($inv);
         if (! $lines) {
@@ -73,7 +77,7 @@ class InvoiceService
         return DB::transaction(function () use ($inv, $lines, $user) {
             $before = $inv->exists ? $inv->getOriginal() : null;
             $inv->created_by ??= $user->id;
-            $inv->status = 'draft';
+            $inv->status = $inv->kind === 'quotation' && $inv->exists ? $inv->getOriginal('status') : 'draft';
             $inv->currency = $inv->currency ?: 'AED';
             if ($inv->currency === 'AED') {
                 $inv->fx_rate = 1;
@@ -84,7 +88,10 @@ class InvoiceService
             $defaultWh = Warehouse::where('company_id', $inv->company_id)->where('branch_id', $inv->branch_id)->orderBy('id')->value('id')
                 ?? Warehouse::where('company_id', $inv->company_id)->orderBy('id')->value('id');
             if (! $inv->due_date) {
-                $inv->due_date = $inv->date->copy()->addDays($inv->party->payment_terms_days);
+                $inv->due_date = $inv->date->copy()->addDays($inv->kind === 'quotation' ? self::QUOTATION_VALID_DAYS : $inv->party->payment_terms_days);
+            }
+            if ($inv->kind === 'quotation' && blank($inv->number)) {
+                $inv->number = $this->sequences->next($inv->company_id, Invoice::PREFIX['quotation'], (int) $inv->date->format('Y'));
             }
             if ($inv->kind === 'purchase' && blank($inv->supplier_invoice_number)) {
                 $inv->supplier_invoice_number = $this->sequences->nextSupplierInvoice($inv->company_id, (int) $inv->date->format('Y'));
@@ -184,6 +191,9 @@ class InvoiceService
 
         return DB::transaction(function () use ($inv, $user) {
             $inv = Invoice::whereKey($inv->id)->lockForUpdate()->firstOrFail();
+            if ($inv->kind === 'quotation') {
+                throw new AccountingException(__('A quotation is not posted. Convert it to an invoice instead.'));
+            }
             if ($inv->status !== 'draft') {
                 throw new AccountingException(__('Only draft invoices can be posted.'));
             }
@@ -397,6 +407,62 @@ class InvoiceService
 
             return $inv;
         });
+    }
+
+    /** Quotation: draft -> sent (also set automatically when it is emailed or sent by WhatsApp). */
+    public function markQuotationSent(Invoice $q, User $user): Invoice
+    {
+        $this->posting->authorize($user, Perm::INVOICES_DRAFT);
+        if ($q->kind !== 'quotation' || $q->status !== 'draft') {
+            return $q;
+        }
+        $q->status = 'sent';
+        $q->save();
+        AuditLog::record('quotation_sent', $q, ['status' => 'draft'], ['status' => 'sent']);
+
+        return $q;
+    }
+
+    /** Turn a quotation into a draft sales invoice with the same lines; the quotation becomes "converted". */
+    public function convertQuotation(Invoice $q, User $user): Invoice
+    {
+        $this->posting->authorize($user, Perm::INVOICES_DRAFT);
+        if ($q->kind !== 'quotation' || ! in_array($q->status, ['draft', 'sent'], true)) {
+            throw new AccountingException(__('Only an open quotation can be converted to an invoice.'));
+        }
+
+        return DB::transaction(function () use ($q, $user) {
+            $inv = $this->saveDraft(new Invoice([
+                'company_id' => $q->company_id, 'branch_id' => $q->branch_id, 'kind' => 'sale', 'payment' => $q->payment,
+                'cash_account_id' => $q->payment === 'cash' ? $q->cash_account_id : null, 'currency' => $q->currency, 'fx_rate' => $q->fx_rate,
+                'party_id' => $q->party_id, 'date' => now()->toDateString(), 'quotation_id' => $q->id,
+                'description' => trim(__('Quotation :n', ['n' => $q->number]).' '.($q->description ?? '')),
+            ]), $q->lines->map(fn ($l) => [
+                'account_id' => $l->account_id, 'description' => $l->description, 'quantity' => $l->quantity,
+                'unit' => $l->unit, 'unit_price' => $l->unit_price, 'tax_code_id' => $l->tax_code_id,
+                'item_id' => $l->item_id, 'warehouse_id' => $l->warehouse_id, 'cost_center_id' => $l->cost_center_id,
+            ])->all(), $user);
+            $before = $q->status;
+            $q->status = 'converted';
+            $q->save();
+            AuditLog::record('converted', $q, ['status' => $before], ['status' => 'converted', 'invoice_id' => $inv->id]);
+
+            return $inv;
+        });
+    }
+
+    public function cancelQuotation(Invoice $q, User $user, ?string $reason = null): Invoice
+    {
+        $this->posting->authorize($user, Perm::INVOICES_DRAFT);
+        if ($q->kind !== 'quotation' || ! in_array($q->status, ['draft', 'sent'], true)) {
+            throw new AccountingException(__('Only an open quotation can be cancelled.'));
+        }
+        $before = $q->status;
+        $q->status = 'cancelled';
+        $q->save();
+        AuditLog::record('cancelled', $q, ['status' => $before], ['status' => 'cancelled'], $reason);
+
+        return $q;
     }
 
     /** Draft credit/debit note pre-filled from an invoice. */

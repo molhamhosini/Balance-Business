@@ -16,7 +16,7 @@ class InvoiceLine extends Model
     {
         $guard = function (InvoiceLine $l) {
             $inv = Invoice::find($l->invoice_id);
-            if ($inv && $inv->status !== 'draft') {
+            if ($inv && $inv->status !== 'draft' && ! ($inv->kind === 'quotation' && $inv->status === 'sent')) {
                 throw new AccountingException(__('Lines of a posted invoice cannot be changed.'));
             }
         };

@@ -16,11 +16,15 @@ class Invoice extends Model
         'sale_return' => 'إشعار دائن / مرتجع مبيعات',
         'purchase' => 'فاتورة شراء',
         'purchase_return' => 'إشعار مدين / مرتجع مشتريات',
+        'quotation' => 'عرض سعر',
     ];
 
-    public const PREFIX = ['sale' => 'INV', 'sale_return' => 'CN', 'purchase' => 'BILL', 'purchase_return' => 'DN'];
+    public const PREFIX = ['sale' => 'INV', 'sale_return' => 'CN', 'purchase' => 'BILL', 'purchase_return' => 'DN', 'quotation' => 'QT'];
 
-    public const STATUSES = ['draft' => 'مسودة', 'posted' => 'مرحّل', 'cancelled' => 'ملغى'];
+    public const STATUSES = ['draft' => 'مسودة', 'posted' => 'مرحّل', 'cancelled' => 'ملغى', 'sent' => 'مُرسَل', 'converted' => 'محوّل إلى فاتورة'];
+
+    /** Quotation states: draft -> sent -> converted (to a sales invoice), or cancelled. */
+    public const QUOTATION_STATUSES = ['draft' => 'مسودة', 'sent' => 'مُرسَل', 'converted' => 'محوّل إلى فاتورة', 'cancelled' => 'ملغى'];
 
     public const EINVOICE = ['not_sent' => 'لم تُرسل', 'sent' => 'مرسلة', 'accepted' => 'مقبولة', 'rejected' => 'مرفوضة'];
 
@@ -37,7 +41,8 @@ class Invoice extends Model
     {
         static::creating(fn (Invoice $i) => $i->uuid ??= (string) Str::uuid());
         static::updating(function (Invoice $i) {
-            if (($i->getOriginal('status') ?? 'draft') !== 'draft' && array_diff(array_keys($i->getDirty()), self::MUTABLE_AFTER_POST)) {
+            $open = $i->kind === 'quotation' ? ['draft', 'sent'] : ['draft'];
+            if (! in_array($i->getOriginal('status') ?? 'draft', $open, true) && array_diff(array_keys($i->getDirty()), self::MUTABLE_AFTER_POST)) {
                 throw new AccountingException(__('A posted invoice cannot be modified. Issue a credit note instead.'));
             }
         });
@@ -56,12 +61,21 @@ class Invoice extends Model
     public function journalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class); }
     public function original(): BelongsTo { return $this->belongsTo(Invoice::class, 'original_invoice_id'); }
     public function returns(): HasMany { return $this->hasMany(Invoice::class, 'original_invoice_id'); }
+    public function quotation(): BelongsTo { return $this->belongsTo(Invoice::class, 'quotation_id'); }
+    public function convertedInvoices(): HasMany { return $this->hasMany(Invoice::class, 'quotation_id'); }
     public function allocations(): HasMany { return $this->hasMany(Allocation::class); }
     public function creditAllocations(): HasMany { return $this->hasMany(Allocation::class, 'credit_invoice_id'); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function poster(): BelongsTo { return $this->belongsTo(User::class, 'posted_by'); }
 
-    public function isSale(): bool { return in_array($this->kind, ['sale', 'sale_return'], true); }
+    public function isSale(): bool { return in_array($this->kind, ['sale', 'sale_return', 'quotation'], true); }
+    public function isQuotation(): bool { return $this->kind === 'quotation'; }
+
+    /** Can go to the customer by email / WhatsApp: a posted sales document, or a quotation. */
+    public function isSendable(): bool
+    {
+        return $this->isQuotation() ? $this->status !== 'cancelled' : ($this->status === 'posted' && $this->isSale());
+    }
     public function isReturn(): bool { return in_array($this->kind, ['sale_return', 'purchase_return'], true); }
     public function partyType(): string { return $this->isSale() ? 'customer' : 'supplier'; }
 

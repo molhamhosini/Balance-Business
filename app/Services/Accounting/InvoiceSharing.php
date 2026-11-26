@@ -36,6 +36,7 @@ class InvoiceSharing
         }
         $mail->send(new InvoiceMail($inv, $message, $this->link($inv)));
         AuditLog::record('emailed', $inv, null, ['to' => $to, 'cc' => $cc]);
+        $this->markSent($inv);
     }
 
     /** wa.me link with the message and the invoice link; phone may be empty (WhatsApp then asks for the contact). */
@@ -43,6 +44,7 @@ class InvoiceSharing
     {
         $this->guard($inv);
         AuditLog::record('whatsapp', $inv, null, ['phone' => $phone]);
+        $this->markSent($inv);
 
         return 'https://wa.me/'.self::normalizePhone($phone).'?text='.rawurlencode($message."\n".$this->link($inv));
     }
@@ -60,9 +62,16 @@ class InvoiceSharing
         return $d;
     }
 
+    private function markSent(Invoice $inv): void
+    {
+        if ($inv->isQuotation() && $inv->status === 'draft' && auth()->user()) {
+            app(InvoiceService::class)->markQuotationSent($inv, auth()->user());
+        }
+    }
+
     private function guard(Invoice $inv): void
     {
-        if ($inv->status !== 'posted' || ! $inv->isSale()) {
+        if (! $inv->isSendable()) {
             throw new \App\Exceptions\AccountingException(__('Only posted sales documents can be sent.'));
         }
     }
