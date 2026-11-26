@@ -207,5 +207,10 @@
     "Download PDF": "Download PDF",
     "Print": "Print",
     "Printed on": "Printed on",
-    "As of": "As of"
+    "As of": "As of",
+    "Also attach the Excel file": "Also attach the Excel file",
+    "Report sent to :to": "Report sent to :to",
+    "Leave empty to choose the contact in WhatsApp.": "Leave empty to choose the contact in WhatsApp.",
+    "WhatsApp opens with the message and a link to the PDF (valid :d days). Press send there.": "WhatsApp opens with the message and a link to the PDF (valid :d days). Press send there.",
+    "The report is attached.": "The report is attached."
 }

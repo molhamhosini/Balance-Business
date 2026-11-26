@@ -16,7 +16,7 @@
                 @foreach ($c['groups'][$k] as $code => $g)
                     <tr><td style="padding-inline-start:24px">{{ $g['label'] }}</td><td class="n">{{ $m($g['amount']) }}</td>@if($p)<td class="n">{{ $m($p['groups'][$k][$code]['amount'] ?? 0) }}</td>@endif</tr>
                 @endforeach
-                <tr class="total"><td>{{ __('Total') }} {{ $label }}</td><td class="n">{{ $m($c['totals'][$k]) }}</td>@if($p)<td class="n">{{ $m($p['totals'][$k]) }}</td>@endif</tr>
+                <tr class="total"><td>{{ __('Total :label', ['label' => $label]) }}</td><td class="n">{{ $m($c['totals'][$k]) }}</td>@if($p)<td class="n">{{ $m($p['totals'][$k]) }}</td>@endif</tr>
             @endforeach
             <tr class="total"><td>{{ __('Liabilities') }} + {{ __('Equity') }}</td><td class="n">{{ $m($c['totals']['liability'] + $c['totals']['equity']) }}</td>@if($p)<td class="n">{{ $m($p['totals']['liability'] + $p['totals']['equity']) }}</td>@endif</tr>
             </tbody>

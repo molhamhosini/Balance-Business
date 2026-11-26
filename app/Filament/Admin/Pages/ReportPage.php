@@ -10,6 +10,7 @@ use Filament\Forms;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Livewire\Attributes\Url;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -101,6 +102,7 @@ abstract class ReportPage extends Page implements HasForms
             Action::make('excel')->label(__('Export to Excel'))->icon('heroicon-o-table-cells')->color('gray')->action(fn () => $this->downloadExcel()),
             Action::make('pdf')->label(__('Download PDF'))->icon('heroicon-o-document-arrow-down')->color('gray')->action(fn () => $this->downloadPdf()),
             Action::make('print')->label(__('Print'))->icon('heroicon-o-printer')->color('gray')->alpineClickHandler('window.print()'),
+            $this->sendActions(),
         ];
     }
 
@@ -123,8 +125,20 @@ abstract class ReportPage extends Page implements HasForms
         return implode(' · ', $parts);
     }
 
-    /** PDF built from the same rows as the Excel export (pure PHP, Arabic shaping and RTL). */
     public function downloadPdf()
+    {
+        $pdf = $this->pdfBinary();
+
+        return response()->streamDownload(fn () => print ($pdf), $this->exportFileName('pdf'), ['Content-Type' => 'application/pdf']);
+    }
+
+    protected function exportFileName(string $ext): string
+    {
+        return str($this->getTitle())->slug().'-'.substr((string) ($this->to ?? now()->toDateString()), 0, 10).'.'.$ext;
+    }
+
+    /** PDF built from the same rows as the Excel export (pure PHP, Arabic shaping and RTL). */
+    public function pdfBinary(): string
     {
         [$headers, $rows] = $this->exportRows();
         $numericCol = [];
@@ -155,10 +169,72 @@ abstract class ReportPage extends Page implements HasForms
         $mpdf->SetDirectionality(app()->getLocale() === 'ar' ? 'rtl' : 'ltr');
         $mpdf->setFooter('{PAGENO} / {nbpg}');
         $mpdf->WriteHTML($html);
-        $file = str($this->getTitle())->slug().'-'.substr((string) ($this->to ?? now()->toDateString()), 0, 10).'.pdf';
 
-        return response()->streamDownload(fn () => print ($mpdf->Output('', 'S')), $file, ['Content-Type' => 'application/pdf']);
+        return $mpdf->Output('', 'S');
     }
+
+    /** Email (PDF attached) or WhatsApp (link to the PDF) for any report. */
+    protected function sendActions(): \Filament\Actions\ActionGroup
+    {
+        $title = fn () => strip_tags((string) $this->getTitle());
+        $message = fn () => $title().' — '.$this->company()->name."\n".$this->exportSubtitle();
+
+        return \Filament\Actions\ActionGroup::make([
+            Action::make('sendEmail')->label(__('Send by email'))->icon('heroicon-o-envelope')
+                ->fillForm(fn () => ['message' => $message(), 'excel' => false])
+                ->form([
+                    Forms\Components\TextInput::make('to')->label(__('To'))->email()->required(),
+                    Forms\Components\TextInput::make('cc')->label(__('Cc'))->placeholder('a@x.com, b@y.com'),
+                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(4)->required(),
+                    Forms\Components\Toggle::make('excel')->label(__('Also attach the Excel file')),
+                ])
+                ->modalSubmitActionLabel(__('Send'))
+                ->action(function (array $data) use ($title) {
+                    try {
+                        $files = [$this->exportFileName('pdf') => [$this->pdfBinary(), 'application/pdf']];
+                        if ($data['excel'] ?? false) {
+                            ob_start();
+                            $this->downloadExcel()->sendContent();
+                            $files[$this->exportFileName('xlsx')] = [ob_get_clean(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+                        }
+                        $mail = \Illuminate\Support\Facades\Mail::to($data['to']);
+                        if (! empty($data['cc'])) {
+                            $mail->cc(array_filter(array_map('trim', explode(',', $data['cc']))));
+                        }
+                        $mail->send(new \App\Mail\ReportMail($title().' — '.$this->company()->name, $data['message'], $files));
+                        \App\Models\AuditLog::record('emailed', null, null, ['report' => $title(), 'to' => $data['to']], null, $this->company()->id);
+                        Notification::make()->success()->title(__('Report sent to :to', ['to' => $data['to']]))->send();
+                    } catch (\Throwable $e) {
+                        report($e);
+                        Notification::make()->danger()->title(__('The email could not be sent'))->body(__('Check the mail settings (MAIL_*) in the .env file.').' '.$e->getMessage())->persistent()->send();
+                    }
+                }),
+            Action::make('sendWhatsapp')->label(__('Send by WhatsApp'))->icon('heroicon-o-chat-bubble-left-right')
+                ->fillForm(fn () => ['message' => $message()])
+                ->form([
+                    Forms\Components\TextInput::make('phone')->label(__('WhatsApp number'))->tel()->helperText(__('Leave empty to choose the contact in WhatsApp.')),
+                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(4)->required(),
+                ])
+                ->modalDescription(__('WhatsApp opens with the message and a link to the PDF (valid :d days). Press send there.', ['d' => self::SHARE_DAYS]))
+                ->modalSubmitActionLabel(__('Open WhatsApp'))
+                ->action(function (array $data) use ($title) {
+                    $disk = \Illuminate\Support\Facades\Storage::disk('local');
+                    foreach ($disk->files('shared-reports') as $old) { // links expire, so the files can go
+                        if ($disk->lastModified($old) < now()->subDays(self::SHARE_DAYS + 1)->timestamp) {
+                            $disk->delete($old);
+                        }
+                    }
+                    $name = \Illuminate\Support\Str::uuid().'.pdf';
+                    \Illuminate\Support\Facades\Storage::disk('local')->put('shared-reports/'.$name, $this->pdfBinary());
+                    $link = \Illuminate\Support\Facades\URL::temporarySignedRoute('report.shared', now()->addDays(self::SHARE_DAYS), ['file' => $name, 'name' => $this->exportFileName('pdf')]);
+                    \App\Models\AuditLog::record('whatsapp', null, null, ['report' => $title(), 'phone' => $data['phone'] ?? null], null, $this->company()->id);
+                    $url = 'https://wa.me/'.\App\Services\Accounting\InvoiceSharing::normalizePhone($data['phone'] ?? '').'?text='.rawurlencode($data['message']."\n".$link);
+                    $this->js('window.open('.json_encode($url).', "_blank")');
+                }),
+        ])->label(__('Send'))->icon('heroicon-o-paper-airplane')->button()->color('success');
+    }
+
+    public const SHARE_DAYS = 30;
 
     public function downloadExcel()
     {

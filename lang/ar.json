@@ -776,5 +776,10 @@
     "Closing stock adjustment posted": "رُحّلت تسوية مخزون آخر المدة",
     "No difference: the inventory account already equals the stock value.": "لا يوجد فرق: رصيد حساب المخزون يساوي قيمة البضاعة.",
     "Download PDF": "تنزيل PDF",
-    "Printed on": "طُبع في"
+    "Printed on": "طُبع في",
+    "Also attach the Excel file": "إرفاق ملف Excel أيضًا",
+    "Report sent to :to": "أُرسل التقرير إلى :to",
+    "Leave empty to choose the contact in WhatsApp.": "اتركه فارغًا لتختار جهة الاتصال من واتساب.",
+    "WhatsApp opens with the message and a link to the PDF (valid :d days). Press send there.": "سيفتح واتساب والرسالة جاهزة مع رابط لملف PDF (صالح :d يومًا)، اضغط إرسال هناك.",
+    "The report is attached.": "التقرير مرفق بهذا الإيميل."
 }

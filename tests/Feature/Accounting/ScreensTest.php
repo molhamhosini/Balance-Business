@@ -137,6 +137,26 @@ class ScreensTest extends AccountingTestCase
         }
     }
 
+    public function test_report_can_be_sent_by_email_and_whatsapp(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+        \Livewire\Livewire::test(\App\Filament\Admin\Pages\TrialBalance::class)
+            ->callAction('sendEmail', ['to' => 'owner@example.com', 'message' => 'ميزان المراجعة', 'excel' => true])->assertHasNoActionErrors();
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ReportMail::class, fn ($m) => $m->hasTo('owner@example.com') && count($m->files) === 2);
+
+        \Livewire\Livewire::test(\App\Filament\Admin\Pages\PartyStatement::class)
+            ->callAction('sendWhatsapp', ['phone' => '0501234567', 'message' => 'كشف حساب'])->assertHasNoActionErrors();
+        $files = \Illuminate\Support\Facades\Storage::disk('local')->files('shared-reports');
+        $this->assertCount(1, $files);
+        $url = \Illuminate\Support\Facades\URL::temporarySignedRoute('report.shared', now()->addDay(), ['file' => basename($files[0]), 'name' => 'x.pdf']);
+        auth()->logout();
+        $this->get($url)->assertOk();
+        $this->get('/r/'.basename($files[0]))->assertForbidden();
+    }
+
     public function test_data_entry_cannot_open_trial_balance(): void
     {
         $this->actingAs($this->entry);
