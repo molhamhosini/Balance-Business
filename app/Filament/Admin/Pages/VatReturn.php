@@ -9,7 +9,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 class VatReturn extends ReportPage
 {
     protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 7;
     protected static bool $costCenterFilter = false;
     protected static string $view = 'filament.pages.vat-return';
 

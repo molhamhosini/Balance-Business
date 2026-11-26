@@ -96,7 +96,7 @@ class ScreensTest extends AccountingTestCase
             Resources\BankStatementResource::getUrl('index', $t), Resources\BankStatementResource::getUrl('create', $t),
             Resources\BankStatementResource::getUrl('view', $t + ['record' => $st]),
             Pages\CostCenterReport::getUrl($t), Pages\CashFlow::getUrl($t), Pages\CashMovement::getUrl($t + ['daily' => 1]),
-            Pages\StockBalance::getUrl($t), Pages\ItemCard::getUrl($t + ['item' => $item->id]), Pages\SlowMoving::getUrl($t), Pages\ItemSalesByCustomer::getUrl($t), Pages\ItemSalesByCustomer::getUrl($t + ['item' => $item->id]), Pages\AssetRegister::getUrl($t),
+            Pages\StockBalance::getUrl($t), Pages\ItemCard::getUrl($t + ['item' => $item->id]), Pages\SlowMoving::getUrl($t), Pages\FinancialPosition::getUrl($t), Pages\BalanceSheet::getUrl($t), Pages\ItemSalesByCustomer::getUrl($t), Pages\ItemSalesByCustomer::getUrl($t + ['item' => $item->id]), Pages\AssetRegister::getUrl($t),
             Pages\IncomeStatement::getUrl($t + ['cc' => \App\Models\CostCenter::where('company_id', $c->id)->value('id')]),
             Pages\DataImport::getUrl($t),
         ];

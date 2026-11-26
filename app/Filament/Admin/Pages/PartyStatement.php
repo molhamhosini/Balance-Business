@@ -11,7 +11,7 @@ use Livewire\Attributes\Url;
 class PartyStatement extends ReportPage
 {
     protected static ?string $navigationIcon = 'heroicon-o-user-circle';
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 8;
     protected static bool $costCenterFilter = false;
     protected static string $view = 'filament.pages.party-statement';
     protected static ?string $reportPermission = Perm::INVOICES_VIEW;

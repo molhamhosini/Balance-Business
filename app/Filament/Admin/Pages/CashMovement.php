@@ -8,7 +8,7 @@ use Filament\Forms;
 class CashMovement extends TableReport
 {
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
-    protected static ?int $navigationSort = 11;
+    protected static ?int $navigationSort = 12;
     protected static bool $costCenterFilter = false;
 
     #[Url] public ?bool $daily = false;
