@@ -43,7 +43,7 @@ class IncomeStatement extends ReportPage
 
     public function getData(): array
     {
-        $svc = app(ReportService::class);
+        $svc = $this->reports();
         $cur = $svc->incomeStatement($this->company(), $this->from, $this->to, $this->branchId());
         $prev = null;
         if ($this->compare) {

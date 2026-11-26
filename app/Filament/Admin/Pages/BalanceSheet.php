@@ -38,7 +38,7 @@ class BalanceSheet extends ReportPage
 
     public function getData(): array
     {
-        $svc = app(ReportService::class);
+        $svc = $this->reports();
 
         return ['cur' => $svc->balanceSheet($this->company(), $this->to, $this->branchId()), 'prev' => $this->compareTo ? $svc->balanceSheet($this->company(), $this->compareTo, $this->branchId()) : null];
     }

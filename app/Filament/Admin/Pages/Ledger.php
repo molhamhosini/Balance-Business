@@ -45,7 +45,7 @@ class Ledger extends ReportPage
     {
         $a = $this->getAccount();
 
-        return $a ? app(ReportService::class)->ledger($a, $this->from, $this->to, $this->branchId()) : null;
+        return $a ? $this->reports()->ledger($a, $this->from, $this->to, $this->branchId()) : null;
     }
 
     protected function exportRows(): array

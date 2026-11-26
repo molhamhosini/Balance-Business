@@ -30,7 +30,7 @@ class TrialBalance extends ReportPage
 
     public function getData(): array
     {
-        return app(ReportService::class)->trialBalance($this->company(), $this->from, $this->to, (int) $this->level, $this->branchId());
+        return $this->reports()->trialBalance($this->company(), $this->from, $this->to, (int) $this->level, $this->branchId());
     }
 
     protected function exportRows(): array

@@ -35,7 +35,7 @@ class VoucherResource extends Resource
     protected static ?string $viewPermission = Perm::VOUCHERS_VIEW;
     protected static ?string $createPermission = Perm::VOUCHERS_DRAFT;
 
-    public static function getNavigationGroup(): ?string { return __('Accounting'); }
+    public static function getNavigationGroup(): ?string { return __('Cash & banks'); }
     public static function getModelLabel(): string { return __('Voucher'); }
     public static function getPluralModelLabel(): string { return __('Receipts & payments'); }
 
@@ -83,9 +83,11 @@ class VoucherResource extends Resource
                 Forms\Components\Placeholder::make('vat_preview')->label(__('VAT'))->content(fn (Get $get) => Money::format(static::previewTax($get))),
                 Forms\Components\Placeholder::make('total_preview')->label(__('Total'))->content(fn (Get $get) => Money::format(Money::toCents($get('amount') ?: 0) + static::previewTax($get))),
                 Forms\Components\Select::make('payment_method')->label(__('Payment method'))->options(fn () => collect(Voucher::METHODS)->map(fn ($l) => __($l))->all())->default('cash')->live()->required(),
-                Forms\Components\TextInput::make('cheque_number')->label(__('Cheque number'))->visible(fn (Get $get) => $get('payment_method') === 'cheque'),
+                Forms\Components\TextInput::make('cheque_number')->label(__('Cheque number'))->visible(fn (Get $get) => $get('payment_method') === 'cheque')->required(fn (Get $get) => $get('payment_method') === 'cheque'),
+                Forms\Components\TextInput::make('cheque_bank')->label(__('Drawn on bank'))->visible(fn (Get $get) => $get('payment_method') === 'cheque'),
                 Forms\Components\DatePicker::make('cheque_due_date')->label(__('Cheque due date'))->visible(fn (Get $get) => $get('payment_method') === 'cheque'),
-                Forms\Components\TextInput::make('description')->label(__('Description'))->columnSpanFull(),
+                Forms\Components\Select::make('cost_center_id')->label(__('Cost center'))->options(fn () => Options::costCenters())->searchable(),
+                Forms\Components\TextInput::make('description')->label(__('Description'))->columnSpan(3),
             ]),
         ]);
     }
@@ -123,6 +125,9 @@ class VoucherResource extends Resource
                 Infolists\Components\TextEntry::make('amount')->label(__('Amount before VAT'))->numeric(2, locale: 'en'),
                 Infolists\Components\TextEntry::make('tax_amount')->label(__('VAT'))->numeric(2, locale: 'en'),
                 Infolists\Components\TextEntry::make('total')->label(__('Total'))->numeric(2, locale: 'en')->weight('bold')->size('lg'),
+                Infolists\Components\TextEntry::make('cheque_number')->label(__('Cheque number'))->visible(fn (Voucher $r) => $r->payment_method === 'cheque')
+                    ->suffix(fn (Voucher $r) => $r->cheque_status ? ' · '.__(Voucher::CHEQUE_STATUSES[$r->cheque_status]).($r->cheque_due_date ? ' · '.$r->cheque_due_date->format('Y-m-d') : '') : ''),
+                Infolists\Components\TextEntry::make('costCenter.label')->label(__('Cost center'))->placeholder('—'),
                 Infolists\Components\TextEntry::make('description')->label(__('Description'))->placeholder('—'),
                 Infolists\Components\TextEntry::make('creator.name')->label(__('Entered by')),
                 Infolists\Components\TextEntry::make('poster.name')->label(__('Posted by'))->placeholder('—'),

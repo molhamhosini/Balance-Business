@@ -18,7 +18,7 @@ class JournalBook extends ReportPage
 
     public function getData()
     {
-        return app(ReportService::class)->journal($this->company(), $this->from, $this->to, $this->branchId());
+        return $this->reports()->journal($this->company(), $this->from, $this->to, $this->branchId());
     }
 
     protected function exportRows(): array

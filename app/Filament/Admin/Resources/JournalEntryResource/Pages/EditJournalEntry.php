@@ -17,7 +17,7 @@ class EditJournalEntry extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $data['lines'] = $this->record->lines->map(fn ($l) => $l->only(['account_id', 'description', 'debit', 'credit', 'tax_code_id']))->all();
+        $data['lines'] = $this->record->lines->map(fn ($l) => $l->only(['account_id', 'description', 'debit', 'credit', 'tax_code_id', 'cost_center_id']))->all();
         $data['date'] = $this->record->date->toDateString();
 
         return $data;

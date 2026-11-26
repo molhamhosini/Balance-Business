@@ -61,6 +61,22 @@ class PostingService
         });
     }
 
+    /**
+     * Create, number and post the entry a document generates (transfers, cheques, stock, assets).
+     * The number is the document's own: PREFIX-YEAR-00001.
+     */
+    public function postGenerated(\Illuminate\Database\Eloquent\Model $source, string $type, string $prefix, array $header, array $lines, User $user, ?string $number = null): JournalEntry
+    {
+        $entry = JournalEntry::create($header + [
+            'type' => $type, 'source_type' => $source->getMorphClass(), 'source_id' => $source->getKey(), 'created_by' => $source->created_by ?? $user->id,
+        ]);
+        $this->replaceLines($entry, $lines);
+        $number ??= $this->sequences->next($entry->company_id, $prefix, (int) \Illuminate\Support\Carbon::parse($entry->date)->format('Y'));
+        $entry->forceFill(['number' => $number])->save();
+
+        return $this->post($entry, $user, system: true);
+    }
+
     public function replaceLines(JournalEntry $entry, array $lines): void
     {
         $entry->lines()->delete();
@@ -73,6 +89,10 @@ class PostingService
                 'journal_entry_id' => $entry->id,
                 'account_id' => $l['account_id'],
                 'party_id' => $l['party_id'] ?? null,
+                'cost_center_id' => $l['cost_center_id'] ?? null,
+                'currency' => $l['currency'] ?? 'AED',
+                'fx_rate' => $l['fx_rate'] ?? 1,
+                'amount_fc' => $l['amount_fc'] ?? null,
                 'debit' => Money::fromCents($dr),
                 'credit' => Money::fromCents($cr),
                 'description' => $l['description'] ?? null,
@@ -115,7 +135,7 @@ class PostingService
             $period = $this->validate($entry);
 
             $type = match ($entry->type) {
-                'voucher', 'invoice' => null, // numbered by the source document
+                'voucher', 'invoice', 'transfer', 'cheque', 'stock', 'depreciation', 'asset' => null, // numbered by the source document
                 'reversal' => 'REV',
                 'opening' => 'OPN',
                 'closing' => 'CLS',
@@ -255,6 +275,8 @@ class PostingService
             $this->replaceLines($rev, $entry->lines->map(fn ($l) => [
                 'account_id' => $l->account_id,
                 'party_id' => $l->party_id,
+                'cost_center_id' => $l->cost_center_id,
+                'currency' => $l->currency, 'fx_rate' => $l->fx_rate, 'amount_fc' => $l->amount_fc,
                 'debit' => $l->credit,
                 'credit' => $l->debit,
                 'description' => $l->description,

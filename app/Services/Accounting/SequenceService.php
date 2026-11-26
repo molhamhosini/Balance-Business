@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
  */
 class SequenceService
 {
-    public const PREFIX = ['JV' => 'JV', 'RV' => 'RV', 'PV' => 'PV', 'REV' => 'REV', 'OPN' => 'OPN', 'CLS' => 'CLS', 'INV' => 'INV', 'CN' => 'CN', 'BILL' => 'BILL', 'DN' => 'DN'];
+    public const PREFIX = ['JV' => 'JV', 'RV' => 'RV', 'PV' => 'PV', 'REV' => 'REV', 'OPN' => 'OPN', 'CLS' => 'CLS', 'INV' => 'INV', 'CN' => 'CN', 'BILL' => 'BILL', 'DN' => 'DN', 'TRF' => 'TRF', 'CHQ' => 'CHQ', 'OST' => 'OST', 'STR' => 'STR', 'ISS' => 'ISS', 'ADJ' => 'ADJ', 'LC' => 'LC', 'DEP' => 'DEP', 'DSP' => 'DSP'];
 
     public function next(int $companyId, string $type, int $year): string
     {

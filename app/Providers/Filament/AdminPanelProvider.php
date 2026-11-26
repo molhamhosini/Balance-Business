@@ -53,7 +53,10 @@ class AdminPanelProvider extends PanelProvider
             ->navigationGroups([
                 NavigationGroup::make()->label(fn () => __('Sales')),
                 NavigationGroup::make()->label(fn () => __('Purchases')),
+                NavigationGroup::make()->label(fn () => __('Cash & banks')),
+                NavigationGroup::make()->label(fn () => __('Inventory')),
                 NavigationGroup::make()->label(fn () => __('Accounting')),
+                NavigationGroup::make()->label(fn () => __('Fixed assets')),
                 NavigationGroup::make()->label(fn () => __('Reports')),
                 NavigationGroup::make()->label(fn () => __('Configuration')),
             ])

@@ -6,7 +6,7 @@
     @foreach ($lines as $l)
         <tr>
             <td>{{ $l->account?->label }}</td>
-            <td>{{ $l->description }}</td>
+            <td>{{ $l->description }}@if ($l->costCenter) <span class="text-xs text-gray-500">· {{ $l->costCenter->code }}</span>@endif</td>
             <td>{{ $l->taxCode?->code }}</td>
             <td class="n">{{ (float) $l->debit ? \App\Support\Money::format($l->debit) : '' }}</td>
             <td class="n">{{ (float) $l->credit ? \App\Support\Money::format($l->credit) : '' }}</td>

@@ -28,5 +28,6 @@ class JournalLine extends Model
     public function entry(): BelongsTo { return $this->belongsTo(JournalEntry::class, 'journal_entry_id'); }
     public function account(): BelongsTo { return $this->belongsTo(Account::class); }
     public function taxCode(): BelongsTo { return $this->belongsTo(TaxCode::class); }
+    public function costCenter(): \Illuminate\Database\Eloquent\Relations\BelongsTo { return $this->belongsTo(CostCenter::class); }
     public function party(): BelongsTo { return $this->belongsTo(Party::class); }
 }

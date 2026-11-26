@@ -86,7 +86,8 @@ class VoucherService
             $entry->forceFill(['number' => $number])->save();
             $this->posting->post($entry, $user, system: true);
 
-            $v->forceFill(['status' => 'posted', 'number' => $number, 'journal_entry_id' => $entry->id, 'posted_by' => $user->id, 'posted_at' => now()]);
+            $v->forceFill(['status' => 'posted', 'number' => $number, 'journal_entry_id' => $entry->id, 'posted_by' => $user->id, 'posted_at' => now(),
+                'cheque_status' => $v->payment_method === 'cheque' && $this->cashSideAccountId($v) !== $v->cash_account_id ? ($v->type === 'receipt' ? 'in_box' : 'issued') : null]);
             $v->saveQuietly(); // draft -> posted transition (guard is for changes after posting)
             AuditLog::record('posted', $v, ['status' => 'draft'], ['status' => 'posted', 'number' => $number, 'entry' => $entry->number]);
             app(InvoiceService::class)->allocateLinked($v, $user);
@@ -157,6 +158,22 @@ class VoucherService
     }
 
     /** The journal lines a voucher generates. */
+    /**
+     * Cheques do not touch the bank on the voucher date: a received cheque waits in "cheques under
+     * collection" until deposited; an issued cheque sits in "post-dated cheques payable" until it clears.
+     */
+    public function cashSideAccountId(Voucher $v): int
+    {
+        if ($v->payment_method === 'cheque') {
+            $acc = $v->company->systemAccount($v->type === 'receipt' ? 'cheques_in' : 'cheques_out');
+            if ($acc) {
+                return $acc->id;
+            }
+        }
+
+        return $v->cash_account_id;
+    }
+
     public function lines(Voucher $v): array
     {
         $net = Money::toCents($v->amount);
@@ -164,11 +181,12 @@ class VoucherService
         $total = $net + $tax;
         $code = $v->taxCode;
         $desc = $v->description ?: $v->party_name;
-        $base = ['party_id' => $v->party_id, 'tax_code_id' => $code?->id, 'tax_direction' => $code ? ($v->type === 'receipt' ? 'sale' : 'purchase') : null];
+        $base = ['party_id' => $v->party_id, 'cost_center_id' => $v->cost_center_id, 'tax_code_id' => $code?->id, 'tax_direction' => $code ? ($v->type === 'receipt' ? 'sale' : 'purchase') : null];
+        $cashSide = $this->cashSideAccountId($v);
 
         if ($v->type === 'receipt') {
             $lines = [
-                ['account_id' => $v->cash_account_id, 'debit' => Money::fromCents($total), 'credit' => 0, 'description' => $desc],
+                ['account_id' => $cashSide, 'debit' => Money::fromCents($total), 'credit' => 0, 'description' => $desc],
                 ['account_id' => $v->counter_account_id, 'debit' => 0, 'credit' => Money::fromCents($net), 'description' => $desc] + $base,
             ];
             if ($tax > 0) {
@@ -181,7 +199,7 @@ class VoucherService
             if ($tax > 0) {
                 $lines[] = ['account_id' => $code->input_account_id, 'debit' => Money::fromCents($tax), 'credit' => 0, 'description' => __('Input VAT'), 'is_tax_line' => true, 'tax_base' => Money::fromCents($net)] + $base;
             }
-            $lines[] = ['account_id' => $v->cash_account_id, 'debit' => 0, 'credit' => Money::fromCents($total), 'description' => $desc];
+            $lines[] = ['account_id' => $cashSide, 'debit' => 0, 'credit' => Money::fromCents($total), 'description' => $desc];
         }
 
         return $lines;

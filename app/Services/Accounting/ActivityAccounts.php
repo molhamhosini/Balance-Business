@@ -15,6 +15,8 @@ class ActivityAccounts
             // Cash boxes and card clearing
             ['1114', 'صندوق الفرع', 'Branch Cash Box', '1110', 'debit', 'all', ['is_cash' => true]],
             ['1117', 'مدفوعات البطاقات تحت التحصيل', 'Card Payments Clearing', '1110', 'debit', 'all'],
+            ['1119', 'شيكات برسم التحصيل', 'Cheques Under Collection', '1110', 'debit', 'all'],
+            ['2126', 'شيكات مؤجلة الدفع', 'Post-dated Cheques Payable', '2120', 'credit', 'all'],
             ['1118', 'مستحقات منصات التوصيل', 'Delivery Platforms Receivable', '1130', 'debit', 'restaurant'],
             // Inventory
             ['1145', 'مخزون المواشي الحية', 'Livestock Inventory', '1140', 'debit', 'slaughterhouse'],
