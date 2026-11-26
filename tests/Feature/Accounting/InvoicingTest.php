@@ -215,6 +215,32 @@ class InvoicingTest extends AccountingTestCase
         $this->invoices()->allocate($v2, [$inv2->id => '400'], $this->accountant);
     }
 
+    public function test_voucher_settles_the_invoices_chosen_on_it_when_posted(): void
+    {
+        $this->postedOpening();
+        $c = $this->party('customer');
+        $a = $this->invoices()->post($this->invoice('sale', $c, [$this->line('4111', '1', '1000')]), $this->accountant); // 1,050.00
+        $b = $this->invoices()->post($this->invoice('sale', $c, [$this->line('4111', '1', '200')]), $this->accountant);  // 210.00
+        $this->assertSame([$a->id, $b->id], $this->invoices()->openInvoicesFor($c->id, 'receipt')->pluck('id')->all());
+        $this->assertCount(0, $this->invoices()->openInvoicesFor($c->id, 'payment'));
+
+        $v = $this->voucher(['type' => 'receipt', 'party_id' => $c->id, 'cash_account_id' => $this->acc('1114'), 'counter_account_id' => $this->acc('1131'), 'amount' => '1160', 'tax_code_id' => $this->tax('OS'),
+            'planned_allocations' => [['invoice_id' => $a->id, 'amount' => '1050'], ['invoice_id' => $b->id, 'amount' => '110']]]);
+        $this->assertSame('draft', $v->status);
+        $this->assertSame('not_paid', $a->fresh()->paymentState(), 'nothing is settled before posting');
+
+        $this->vouchers()->post($v, $this->accountant);
+        $this->assertSame('paid', $a->fresh()->paymentState());
+        $this->assertSame('partial', $b->fresh()->paymentState());
+        $this->assertSame(10000, $b->fresh()->openCents());
+        $this->assertSame(0, $this->invoices()->unallocatedCents($v->fresh()));
+
+        // More than the open balance, or more than the voucher, is rejected on save.
+        $this->expectException(AccountingException::class);
+        $this->voucher(['type' => 'receipt', 'party_id' => $c->id, 'cash_account_id' => $this->acc('1114'), 'counter_account_id' => $this->acc('1131'), 'amount' => '50', 'tax_code_id' => $this->tax('OS'),
+            'planned_allocations' => [['invoice_id' => $b->id, 'amount' => '100']]]);
+    }
+
     public function test_aging_buckets_by_due_date_and_statement(): void
     {
         $c = $this->party('customer', ['payment_terms_days' => 0]);

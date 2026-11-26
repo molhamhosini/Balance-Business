@@ -15,6 +15,13 @@ class EditVoucher extends EditRecord
 {
     protected static string $resource = VoucherResource::class;
 
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        $data['settle_invoice_ids'] = collect($this->record->planned_allocations ?? [])->pluck('invoice_id')->map(fn ($id) => (string) $id)->all();
+
+        return $data;
+    }
+
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         try {
