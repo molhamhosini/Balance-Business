@@ -10,7 +10,7 @@ use Livewire\Attributes\Url;
 class Aging extends ReportPage
 {
     protected static ?string $navigationIcon = 'heroicon-o-clock';
-    protected static ?int $navigationSort = 8;
+    protected static ?int $navigationSort = 9;
     protected static bool $costCenterFilter = false;
     protected static string $view = 'filament.pages.aging';
 

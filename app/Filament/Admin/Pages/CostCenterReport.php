@@ -5,7 +5,7 @@ namespace App\Filament\Admin\Pages;
 class CostCenterReport extends TableReport
 {
     protected static ?string $navigationIcon = 'heroicon-o-chart-pie';
-    protected static ?int $navigationSort = 9;
+    protected static ?int $navigationSort = 10;
     protected static bool $costCenterFilter = false;
 
     public static function getNavigationLabel(): string { return __('Cost center profitability'); }

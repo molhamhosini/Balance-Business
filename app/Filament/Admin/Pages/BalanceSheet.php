@@ -55,6 +55,6 @@ class BalanceSheet extends ReportPage
             $rows[] = [__('Total').' '.$label, $d['cur']['totals'][$k], $d['prev']['totals'][$k] ?? null];
         }
 
-        return [['', $this->to, $this->compareTo], $rows];
+        return [['', substr((string) $this->to, 0, 10), substr((string) $this->compareTo, 0, 10)], $rows];
     }
 }

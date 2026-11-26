@@ -180,5 +180,15 @@
     ":doc no. :n dated :d for :amount :cur.": ":doc no. :n dated :d for :amount :cur.",
     "Thank you.": "Thank you.",
     "View and print the invoice": "View and print the invoice",
-    "The invoice is also attached. The link is valid for :d days.": "The invoice is also attached. The link is valid for :d days."
+    "The invoice is also attached. The link is valid for :d days.": "The invoice is also attached. The link is valid for :d days.",
+    "Statement of financial position": "Statement of financial position",
+    "Non-current assets": "Non-current assets",
+    "Current assets": "Current assets",
+    "Total assets": "Total assets",
+    "Non-current liabilities": "Non-current liabilities",
+    "Current liabilities": "Current liabilities",
+    "Total liabilities": "Total liabilities",
+    "Total equity and liabilities": "Total equity and liabilities",
+    "Profit / loss for the period (not yet closed)": "Profit / loss for the period (not yet closed)",
+    "Total :label": "Total :label"
 }

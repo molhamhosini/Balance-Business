@@ -7,7 +7,7 @@ use App\Support\Money;
 class CashFlow extends TableReport
 {
     protected static ?string $navigationIcon = 'heroicon-o-arrow-trending-up';
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 11;
     protected static bool $costCenterFilter = false;
 
     public static function getNavigationLabel(): string { return __('Cash flow statement'); }

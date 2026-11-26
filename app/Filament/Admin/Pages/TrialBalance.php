@@ -9,7 +9,7 @@ use Livewire\Attributes\Url;
 class TrialBalance extends ReportPage
 {
     protected static ?string $navigationIcon = 'heroicon-o-scale';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 2;
     protected static string $view = 'filament.pages.trial-balance';
 
     #[Url] public int $level = 4;

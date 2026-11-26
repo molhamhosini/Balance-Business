@@ -218,6 +218,27 @@ class AcceptanceTest extends AccountingTestCase
         $this->assertSame(Money::toCents('1234.57') - Money::toCents('333.33'), $is['net']);
     }
 
+    public function test_balance_sheet_follows_ifrs_current_and_non_current_split(): void
+    {
+        $this->postedOpening(); // cash 10,000 + bank 50,000 against capital 60,000
+        $e = $this->draft([
+            ['account_id' => $this->acc('1215'), 'debit' => '80000', 'credit' => 0],      // vehicle
+            ['account_id' => $this->acc('2211'), 'debit' => 0, 'credit' => '70000'],        // long-term loan
+            ['account_id' => $this->acc('1121'), 'debit' => 0, 'credit' => '10000'],
+        ], '2026-11-10');
+        $this->posting()->post($e, $this->accountant);
+        $bs = app(ReportService::class)->balanceSheet($this->company, '2026-11-30');
+        $sec = collect($bs['sections'])->keyBy('key');
+        $this->assertSame(['nca', 'ca', 'ta', 'eq', 'ncl', 'cl', 'tl', 'tle'], $sec->keys()->all());
+        $this->assertSame(8000000, $sec['nca']['total']);
+        $this->assertSame(5000000, $sec['ca']['total']);
+        $this->assertSame(13000000, $sec['ta']['total']);
+        $this->assertSame(6000000, $sec['eq']['total']);
+        $this->assertSame(7000000, $sec['ncl']['total']);
+        $this->assertSame(0, $sec['cl']['total']);
+        $this->assertSame($sec['ta']['total'], $sec['tle']['total']);
+    }
+
     public function test_vat_201_boxes(): void
     {
         $this->postedOpening();

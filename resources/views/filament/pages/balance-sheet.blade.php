@@ -9,7 +9,7 @@
             @if ($c['balanced']) <span class="bb-ok">{{ __('Balanced') }}</span> @else <span class="bb-bad">{{ __('Not balanced') }}</span> @endif
         </x-slot>
         <div class="bb-scroll"><table class="bb-report">
-            <thead><tr><th></th><th class="n">{{ $to }}</th>@if($p)<th class="n">{{ $compareTo }}</th>@endif</tr></thead>
+            <thead><tr><th></th><th class="n">{{ substr((string) $to, 0, 10) }}</th>@if($p)<th class="n">{{ substr((string) $compareTo, 0, 10) }}</th>@endif</tr></thead>
             <tbody>
             @foreach (['asset' => __('Assets'), 'liability' => __('Liabilities'), 'equity' => __('Equity')] as $k => $label)
                 <tr class="head"><td colspan="{{ $p ? 3 : 2 }}">{{ $label }}</td></tr>
