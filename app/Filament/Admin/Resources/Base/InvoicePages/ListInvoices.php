@@ -1,0 +1,41 @@
+<?php
+
+namespace App\Filament\Admin\Resources\Base\InvoicePages;
+
+use Filament\Actions;
+use Filament\Resources\Components\Tab;
+use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Builder;
+
+abstract class ListInvoices extends ListRecords
+{
+    protected function getHeaderActions(): array
+    {
+        $r = static::getResource();
+        $side = $r::side();
+
+        return [
+            Actions\Action::make('new')->label($side === 'sale' ? __('New invoice') : __('New bill'))->icon('heroicon-o-plus')
+                ->url(fn () => $r::getUrl('create', ['kind' => $side]))->visible(fn () => $r::canCreate()),
+            Actions\Action::make('newReturn')->label($side === 'sale' ? __('New credit note') : __('New debit note'))->icon('heroicon-o-receipt-refund')->color('warning')
+                ->url(fn () => $r::getUrl('create', ['kind' => $side.'_return']))->visible(fn () => $r::canCreate()),
+        ];
+    }
+
+    public function getTabs(): array
+    {
+        $r = static::getResource();
+        $side = $r::side();
+        $open = fn (Builder $q) => $q->where('status', 'posted')->where('payment', 'credit')
+            ->whereRaw('total > (select coalesce(sum(a.amount),0) from allocations a where a.invoice_id = invoices.id)');
+
+        return [
+            'all' => Tab::make(__('All')),
+            'invoices' => Tab::make($side === 'sale' ? __('Invoices') : __('Bills'))->modifyQueryUsing(fn (Builder $q) => $q->where('kind', $side)),
+            'returns' => Tab::make($side === 'sale' ? __('Credit notes') : __('Debit notes'))->modifyQueryUsing(fn (Builder $q) => $q->where('kind', $side.'_return')),
+            'open' => Tab::make(__('To pay'))->modifyQueryUsing(fn (Builder $q) => $open($q->where('kind', $side))),
+            'draft' => Tab::make(__('Drafts'))->modifyQueryUsing(fn (Builder $q) => $q->where('status', 'draft'))
+                ->badge(fn () => $r::getEloquentQuery()->where('status', 'draft')->count() ?: null)->badgeColor('warning'),
+        ];
+    }
+}

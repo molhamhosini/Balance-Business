@@ -37,4 +37,10 @@
 /* Denser lists, closer to a classic ERP */
 .fi-ta-text{padding-top:.45rem!important;padding-bottom:.45rem!important}
 .fi-ta-header-cell{padding-top:.6rem!important;padding-bottom:.6rem!important}
+/* Invoice totals (Odoo-like, aligned to the end) */
+.bb-totals{margin-inline-start:auto;max-width:340px;display:flex;flex-direction:column;gap:4px;font-variant-numeric:tabular-nums}
+.bb-totals div{display:flex;justify-content:space-between;gap:24px;font-size:14px}
+.bb-totals .grand{border-top:2px solid currentColor;padding-top:6px;font-size:17px}
+.bb-totals .due b{color:rgb(225 29 72)}
+.bb-aging td.late{color:rgb(225 29 72)}
 </style>

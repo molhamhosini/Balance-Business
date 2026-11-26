@@ -17,3 +17,26 @@ Route::get('/vouchers/{voucher}/print', function (\App\Models\Voucher $voucher) 
 
     return view('print.voucher', ['v' => $voucher->load(['company', 'branch', 'cashAccount', 'counterAccount', 'taxCode', 'creator', 'poster'])]);
 })->middleware(['web', 'auth'])->name('voucher.print');
+
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::get('/invoices/{invoice}/print', function (\App\Models\Invoice $invoice) {
+        abort_unless(auth()->user()->canAccessTenant($invoice->company) && auth()->user()->can(\App\Support\Perm::INVOICES_VIEW), 403);
+
+        return view('print.invoice', ['inv' => $invoice->load(['company', 'branch', 'party', 'lines.taxCode', 'original'])]);
+    })->name('invoice.print');
+
+    Route::get('/invoices/{invoice}/einvoice.{format}', function (\App\Models\Invoice $invoice, string $format) {
+        abort_unless(auth()->user()->canAccessTenant($invoice->company) && auth()->user()->can(\App\Support\Perm::INVOICES_VIEW), 403);
+        $svc = app(\App\Services\Accounting\EInvoiceService::class);
+        try {
+            $body = $format === 'xml' ? $svc->toUbl($invoice) : $svc->toJson($invoice);
+        } catch (\App\Exceptions\AccountingException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        return response($body, 200, [
+            'Content-Type' => $format === 'xml' ? 'application/xml' : 'application/json',
+            'Content-Disposition' => 'attachment; filename="'.$invoice->number.'.'.$format.'"',
+        ]);
+    })->whereIn('format', ['xml', 'json'])->name('invoice.einvoice');
+});
