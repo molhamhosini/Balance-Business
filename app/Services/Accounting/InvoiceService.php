@@ -264,9 +264,10 @@ class InvoiceService
             + $side($total, $partyDebit) + ['description' => $inv->party->name] + ($fc ? $fc + ['amount_fc' => $inv->total] : []);
 
         $vat = []; // tax_code_id => [base, tax]
-        foreach ($inv->lines()->with('taxCode')->get() as $l) {
+        $periodicAccount = $this->periodicPurchaseAccount($inv);
+        foreach ($inv->lines()->with(['taxCode', 'item'])->get() as $l) {
             $net = $aed(Money::toCents($l->net));
-            $lines[] = ['account_id' => $l->account_id, 'description' => $l->description, 'cost_center_id' => $l->cost_center_id, 'tax_code_id' => $l->tax_code_id, 'tax_direction' => $l->tax_code_id ? $dir : null]
+            $lines[] = ['account_id' => $periodicAccount($l) ?? $l->account_id, 'description' => $l->description, 'cost_center_id' => $l->cost_center_id, 'tax_code_id' => $l->tax_code_id, 'tax_direction' => $l->tax_code_id ? $dir : null]
                 + $side($net, ! $partyDebit) + ($fc ? $fc + ['amount_fc' => $l->net] : []);
             if ($l->taxCode && in_array($l->taxCode->type, ['standard', 'reverse_charge'], true)) {
                 $vat[$l->tax_code_id] ??= [0, 0, $l->taxCode];
@@ -300,8 +301,25 @@ class InvoiceService
      *   purchase        stock in at the net bill value (the line itself is posted to inventory)
      *   purchase return stock out at the bill price (the line itself credits inventory)
      */
+    /**
+     * Periodic inventory: a stock item bought or returned is posted to purchases / purchase returns
+     * instead of the inventory account (the inventory account only moves with the closing adjustment).
+     */
+    private function periodicPurchaseAccount(Invoice $inv): \Closure
+    {
+        $c = $inv->company;
+        if (! $c->isPeriodic() || $inv->isSale()) {
+            return fn ($l) => null;
+        }
+        $inventory = \App\Models\Account::where('company_id', $c->id)->where(fn ($q) => $q->where('system_key', 'inventory')->orWhereIn('id', \App\Models\Item::where('company_id', $c->id)->whereNotNull('inventory_account_id')->select('inventory_account_id')))->pluck('id')->all();
+        $target = $inv->kind === 'purchase_return' ? ($c->systemAccount('purchase_returns') ?? $c->systemAccount('cogs')) : $c->systemAccount('cogs');
+
+        return fn ($l) => $l->item?->isStock() && $target && in_array($l->account_id, $inventory, true) ? $target->id : null;
+    }
+
     private function stockLines(Invoice $inv, int $entryId): array
     {
+        $periodic = $inv->company->isPeriodic(); // quantities and average cost still tracked; no cost entry per sale
         $out = [];
         $rate = (float) ($inv->fx_rate ?: 1);
         $date = $inv->date->toDateString();
@@ -319,7 +337,7 @@ class InvoiceService
                 case 'sale':
                     $cost = -Money::toCents($this->inventory->issue($l->item, $wh, $milli, $date, $inv, $entryId, $desc)->value);
                     $l->forceFill(['cost' => Money::fromCents($cost)])->saveQuietly();
-                    if ($cost === 0) {
+                    if ($cost === 0 || $periodic) {
                         break;
                     }
                     $out[] = ['account_id' => $cogsAcc, 'debit' => Money::fromCents($cost), 'credit' => 0, 'description' => __('Cost of sales').' — '.$desc, 'cost_center_id' => $l->cost_center_id];
@@ -332,6 +350,8 @@ class InvoiceService
                     $cost = (int) round($milli * $unit);
                     if ($cost > 0) {
                         $this->inventory->receive($l->item, $wh, $milli, $cost, $date, $inv, $entryId, $desc);
+                    }
+                    if ($cost > 0 && ! $periodic) {
                         $out[] = ['account_id' => $invAcc, 'debit' => Money::fromCents($cost), 'credit' => 0, 'description' => __('Returned to stock').' — '.$desc];
                         $out[] = ['account_id' => $cogsAcc, 'debit' => 0, 'credit' => Money::fromCents($cost), 'description' => __('Returned to stock').' — '.$desc, 'cost_center_id' => $l->cost_center_id];
                     }

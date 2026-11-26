@@ -16,9 +16,10 @@ class StockDocument extends Model
         'transfer' => 'تحويل بين المستودعات',
         'count' => 'جرد فعلي وتسوية',
         'landed_cost' => 'تكاليف الشحن والجمارك',
+        'closing' => 'تسوية مخزون آخر المدة (جرد دوري)',
     ];
 
-    public const PREFIX = ['opening' => 'OST', 'issue' => 'ISS', 'transfer' => 'STR', 'count' => 'ADJ', 'landed_cost' => 'LC'];
+    public const PREFIX = ['opening' => 'OST', 'issue' => 'ISS', 'transfer' => 'STR', 'count' => 'ADJ', 'landed_cost' => 'LC', 'closing' => 'CST'];
 
     public const STATUSES = ['draft' => 'مسودة', 'posted' => 'مرحّل', 'cancelled' => 'ملغى'];
 

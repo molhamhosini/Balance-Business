@@ -17,7 +17,7 @@ class CompanySetup
         'fx_gain' => '4220', 'fx_loss' => '6610', 'inventory_variance' => '5130',
         'customers' => '1131', 'suppliers' => '2111', 'banks' => '1120',
         'cheques_in' => '1119', 'cheques_out' => '2126', 'inventory' => '1141', 'cogs' => '5111',
-        'freight_in' => '5120', 'depreciation' => '6510', 'asset_gain' => '4240', 'asset_loss' => '6630',
+        'freight_in' => '5120', 'purchase_returns' => '5113', 'depreciation' => '6510', 'asset_gain' => '4240', 'asset_loss' => '6630',
     ];
 
     /** Fixed asset categories: [name_ar, name_en, asset, accumulated, life in months]. */

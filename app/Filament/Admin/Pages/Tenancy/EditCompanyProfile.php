@@ -32,6 +32,9 @@ class EditCompanyProfile extends EditTenantProfile
                     ->helperText(__('Printed at the bottom of every invoice, e.g. bank account / IBAN and payment terms.')),
             ]),
             Forms\Components\Section::make(__('Controls'))->columns(3)->schema([
+                Forms\Components\Radio::make('inventory_system')->label(__('Inventory system'))->inline()->required()
+                    ->options(fn () => collect(\App\Models\Company::INVENTORY_SYSTEMS)->map(fn ($l) => __($l))->all())
+                    ->helperText(__('Perpetual: every sale posts its cost (Dr cost of sales / Cr inventory). Periodic: purchases are posted to the purchases account and the inventory account is updated by the closing stock adjustment at the end of each period (Inventory → Stock documents). Run the closing adjustment before switching.'))->columnSpanFull(),
                 Forms\Components\Toggle::make('allow_negative_stock')->label(__('Allow selling or issuing more than the quantity in stock'))->inline(false),
                 Forms\Components\TextInput::make('voucher_approval_limit')->label(__('Payment approval limit (chief accountant above)'))->numeric()->required(),
                 Forms\Components\Toggle::make('allow_negative_cash')->label(__('Allow negative cash boxes'))->inline(false),

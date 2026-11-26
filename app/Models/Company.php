@@ -49,6 +49,15 @@ class Company extends Model implements HasCurrentTenantLabel
     public function depreciationRuns(): HasMany { return $this->hasMany(DepreciationRun::class); }
     public function auditLogs(): HasMany { return $this->hasMany(AuditLog::class); }
 
+    public const INVENTORY_SYSTEMS = ['perpetual' => 'جرد مستمر', 'periodic' => 'جرد دوري'];
+
+    /** Periodic inventory: purchases go to the purchases account, no cost-of-sales entry per sale; the
+     *  inventory account is set to the stock value by a closing adjustment at the end of each period. */
+    public function isPeriodic(): bool
+    {
+        return $this->inventory_system === 'periodic';
+    }
+
     public function systemAccount(string $key): ?Account
     {
         return $this->accounts()->where('system_key', $key)->first();

@@ -192,7 +192,10 @@ abstract class InvoiceResource extends Resource
             return;
         }
         $sale = static::side() === 'sale';
-        $account = $sale ? $i->sales_account_id : ($i->isStock() ? ($i->inventory_account_id ?? \Filament\Facades\Filament::getTenant()->systemAccount('inventory')?->id) : $i->purchase_account_id);
+        $tenant = \Filament\Facades\Filament::getTenant();
+        $account = $sale ? $i->sales_account_id : ($i->isStock()
+            ? ($tenant->isPeriodic() ? $tenant->systemAccount('cogs')?->id : ($i->inventory_account_id ?? $tenant->systemAccount('inventory')?->id))
+            : $i->purchase_account_id);
         if ($account) {
             $set('account_id', $account);
         }

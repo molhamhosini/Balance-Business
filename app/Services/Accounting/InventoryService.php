@@ -181,6 +181,10 @@ class InventoryService
             };
             $invAcc = fn (Item $i) => $i->inventory_account_id ?? $d->company->systemAccount('inventory')?->id;
             $variance = $d->company->systemAccount('inventory_variance')?->id;
+            // Periodic inventory: the inventory account moves only with the opening stock and the closing
+            // adjustment; consumption is taken out of purchases, count differences and landed costs stay in cost of sales.
+            $periodic = $d->company->isPeriodic();
+            $purchases = $d->company->systemAccount('cogs')?->id;
 
             switch ($d->type) {
                 case 'opening':
@@ -196,7 +200,7 @@ class InventoryService
                         } else {
                             $cents = Money::toCents($this->issue($l->item, $d->warehouse, $q, $date, $d, null, $desc)->value); // negative
                         }
-                        $add($invAcc($l->item), $cents, $l->item->name_ar);
+                        $add($periodic && $d->type === 'issue' ? $purchases : $invAcc($l->item), $cents, $l->item->name_ar);
                         $add($d->counter_account_id, -$cents, $l->item->name_ar);
                     }
                     break;
@@ -220,6 +224,9 @@ class InventoryService
                             $cents = Money::toCents($this->issue($l->item, $d->warehouse, -$diff, $date, $d, null, __('Count shortage'))->value);
                         } else {
                             continue;
+                        }
+                        if ($periodic) {
+                            continue; // reflected in the closing stock value
                         }
                         $add($invAcc($l->item), $cents, $l->item->name_ar);
                         $add($d->counter_account_id ?? $variance, -$cents, __('Inventory count difference').' — '.$l->item->name_ar);
@@ -262,9 +269,20 @@ class InventoryService
                         }
                         // value only, no quantity: raises the average cost of what is in stock
                         $this->write($item, $bl->warehouse ?? $d->warehouse, 0, $share, $date, $d, null, __('Landed cost').' '.$bl->invoice->number);
-                        $add($invAcc($item), $share, __('Landed cost').' — '.$item->name_ar);
+                        $add($periodic ? ($d->company->systemAccount('freight_in')?->id ?? $purchases) : $invAcc($item), $share, __('Landed cost').' — '.$item->name_ar);
                     }
                     $add($d->counter_account_id, -$total, $desc);
+                    break;
+                case 'closing':
+                    // Periodic inventory, end of period: set each inventory account to the value of the stock
+                    // on hand (weighted average) against cost of sales. COGS = opening + purchases − closing.
+                    if (! $periodic) {
+                        throw new AccountingException(__('The closing stock adjustment is used with the periodic inventory system.'));
+                    }
+                    foreach ($this->closingAdjustments($d->company, $date) as $accountId => $diff) {
+                        $add($accountId, $diff, __('Closing stock').' '.$date);
+                        $add($purchases, -$diff, __('Change in inventory').' '.$date);
+                    }
                     break;
             }
 
@@ -279,6 +297,44 @@ class InventoryService
 
             return $d;
         });
+    }
+
+    /**
+     * Per inventory account: stock value on hand at $date minus the account's book balance, in fils.
+     *
+     * @return array<int, int>
+     */
+    public function closingAdjustments(\App\Models\Company $company, string $date): array
+    {
+        $fallback = $company->systemAccount('inventory')?->id;
+        $stock = DB::table('stock_moves as m')->join('items as i', 'i.id', '=', 'm.item_id')
+            ->where('m.company_id', $company->id)->where('m.date', '<=', $date)
+            ->groupBy('i.inventory_account_id')->selectRaw('i.inventory_account_id acc, SUM(m.value) v')->get();
+        $values = [];
+        foreach ($stock as $r) {
+            $acc = $r->acc ?? $fallback;
+            $values[$acc] = ($values[$acc] ?? 0) + Money::toCents((string) $r->v);
+        }
+        $accounts = array_unique(array_filter(array_merge(array_keys($values), [$fallback], Item::where('company_id', $company->id)->whereNotNull('inventory_account_id')->pluck('inventory_account_id')->all())));
+        $sums = app(ReportService::class)->sums($company, null, $date);
+        $out = [];
+        foreach ($accounts as $acc) {
+            $diff = ($values[$acc] ?? 0) - (($sums[$acc]['d'] ?? 0) - ($sums[$acc]['c'] ?? 0));
+            if ($diff !== 0) {
+                $out[$acc] = $diff;
+            }
+        }
+
+        return $out;
+    }
+
+    /** Periodic inventory: create and post the closing stock adjustment for a date. */
+    public function postClosing(\App\Models\Company $company, string $date, int $branchId, User $user): StockDocument
+    {
+        $d = StockDocument::create(['company_id' => $company->id, 'branch_id' => $branchId, 'type' => 'closing', 'date' => $date,
+            'description' => __('Closing stock adjustment'), 'status' => 'draft', 'created_by' => $user->id]);
+
+        return $this->postDocument($d, $user);
     }
 
     public function cancelDocument(StockDocument $d, User $user, string $reason): StockDocument

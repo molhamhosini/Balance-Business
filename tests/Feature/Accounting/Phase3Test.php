@@ -189,6 +189,36 @@ class Phase3Test extends AccountingTestCase
         $this->assertNull($r::lastSalePrice($c1->id, $item->id, null, 'USD'));
     }
 
+    public function test_periodic_inventory_posts_purchases_and_closing_adjustment(): void
+    {
+        $this->company->update(['inventory_system' => 'periodic']);
+        $this->company->refresh();
+        $item = $this->item();
+        $this->doc('opening', [['item_id' => $item->id, 'quantity' => '100', 'unit_cost' => '20']], ['counter_account_id' => $this->acc('3111')]); // inventory 2,000
+        $bill = $this->bill($this->party('supplier'), [['item_id' => $item->id, 'quantity' => '50', 'unit_price' => '26', 'tax_code_id' => $this->tax('SR')]]);
+        $bl = $bill->journalEntry->lines->keyBy(fn ($l) => $l->account->code);
+        $this->assertSame('1300.00', $bl['5111']->debit, 'purchase goes to purchases, not inventory');
+        $this->assertArrayNotHasKey('1146', $bl->all());
+
+        $sale = $this->sale($this->party('customer'), [['item_id' => $item->id, 'quantity' => '30', 'unit_price' => '40']]);
+        $codes = $sale->journalEntry->lines->map(fn ($l) => $l->account->code)->all();
+        $this->assertNotContains('1146', $codes, 'no cost-of-sales entry per sale');
+        $this->assertSame('120.000', $item->fresh()->qty_on_hand); // quantities still tracked
+        $this->assertSame('22.000000', $item->fresh()->avg_cost);
+
+        $r = app(ReportService::class);
+        $d = $this->inv()->postClosing($this->company, '2026-11-30', $this->branchId(), $this->accountant);
+        $this->assertSame('posted', $d->status);
+        $tb = $r->sums($this->company, null, '2026-11-30');
+        $this->assertSame(264000, ($tb[$this->acc('1146')]['d'] ?? 0) - ($tb[$this->acc('1146')]['c'] ?? 0), 'closing stock 120 × 22');
+        // cost of sales = opening 2,000 + purchases 1,300 − closing 2,640 = 660, same as the perpetual method
+        $this->assertSame(66000, ($tb[$this->acc('5111')]['d'] ?? 0) - ($tb[$this->acc('5111')]['c'] ?? 0));
+        $this->assertTrue($r->balanceSheet($this->company, '2026-11-30')['balanced']);
+
+        // a second run with nothing new changes nothing
+        $this->assertNull($this->inv()->postClosing($this->company, '2026-11-30', $this->branchId(), $this->accountant)->journal_entry_id);
+    }
+
     public function test_units_conversion_transfer_count_and_landed_cost(): void
     {
         $item = $this->item(['unit' => 'كغ']);

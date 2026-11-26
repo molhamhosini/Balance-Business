@@ -764,5 +764,15 @@
     "Total equity and liabilities": "إجمالي حقوق الملكية والخصوم",
     "Profit / loss for the period (not yet closed)": "ربح / خسارة الفترة (غير مقفل)",
     "Total :label": "إجمالي :label",
-    "Last price to this customer: :p (:d)": "آخر سعر لهذا العميل: :p (:d)"
+    "Last price to this customer: :p (:d)": "آخر سعر لهذا العميل: :p (:d)",
+    "Inventory system": "طريقة الجرد",
+    "Perpetual: every sale posts its cost (Dr cost of sales / Cr inventory). Periodic: purchases are posted to the purchases account and the inventory account is updated by the closing stock adjustment at the end of each period (Inventory → Stock documents). Run the closing adjustment before switching.": "المستمر: كل بيع يسجّل تكلفته فورًا (من حـ/ تكلفة المبيعات إلى حـ/ المخزون). الدوري: تُسجَّل المشتريات في حساب المشتريات، ويُعدَّل حساب المخزون بقيد تسوية مخزون آخر المدة في نهاية كل فترة (من المخزون ← المستندات المخزنية). نفّذ تسوية آخر المدة قبل التبديل بين الطريقتين.",
+    "The closing stock adjustment is used with the periodic inventory system.": "تسوية مخزون آخر المدة تُستخدم مع طريقة الجرد الدوري فقط.",
+    "Closing stock": "مخزون آخر المدة",
+    "Change in inventory": "التغير في المخزون",
+    "Closing stock adjustment": "تسوية مخزون آخر المدة",
+    "Period end date": "تاريخ نهاية الفترة",
+    "Sets the inventory account to the value of the stock on hand at that date (quantities × weighted average cost) against cost of sales. Record the physical count first.": "يجعل رصيد حساب المخزون مساويًا لقيمة البضاعة الموجودة في هذا التاريخ (الكمية × متوسط التكلفة المرجّح)، والطرف المقابل تكلفة المبيعات. سجّل الجرد الفعلي أولًا.",
+    "Closing stock adjustment posted": "رُحّلت تسوية مخزون آخر المدة",
+    "No difference: the inventory account already equals the stock value.": "لا يوجد فرق: رصيد حساب المخزون يساوي قيمة البضاعة."
 }
