@@ -191,5 +191,17 @@
     "Total equity and liabilities": "Total equity and liabilities",
     "Profit / loss for the period (not yet closed)": "Profit / loss for the period (not yet closed)",
     "Total :label": "Total :label",
-    "Last price to this customer: :p (:d)": "Last price to this customer: :p (:d)"
+    "Last price to this customer: :p (:d)": "Last price to this customer: :p (:d)",
+    "Inventory system": "Inventory system",
+    "جرد مستمر": "Perpetual",
+    "جرد دوري": "Periodic",
+    "Perpetual: every sale posts its cost (Dr cost of sales / Cr inventory). Periodic: purchases are posted to the purchases account and the inventory account is updated by the closing stock adjustment at the end of each period (Inventory → Stock documents). Run the closing adjustment before switching.": "Perpetual: every sale posts its cost (Dr cost of sales / Cr inventory). Periodic: purchases are posted to the purchases account and the inventory account is updated by the closing stock adjustment at the end of each period (Inventory → Stock documents). Run the closing adjustment before switching.",
+    "The closing stock adjustment is used with the periodic inventory system.": "The closing stock adjustment is used with the periodic inventory system.",
+    "Closing stock": "Closing stock",
+    "Change in inventory": "Change in inventory",
+    "Closing stock adjustment": "Closing stock adjustment",
+    "Period end date": "Period end date",
+    "Sets the inventory account to the value of the stock on hand at that date (quantities × weighted average cost) against cost of sales. Record the physical count first.": "Sets the inventory account to the value of the stock on hand at that date (quantities × weighted average cost) against cost of sales. Record the physical count first.",
+    "Closing stock adjustment posted": "Closing stock adjustment posted",
+    "No difference: the inventory account already equals the stock value.": "No difference: the inventory account already equals the stock value."
 }

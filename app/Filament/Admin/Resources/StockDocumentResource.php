@@ -48,7 +48,7 @@ class StockDocumentResource extends Resource
         return $form->schema([
             Forms\Components\Section::make()->columns(4)->schema([
                 Forms\Components\Select::make('type')->label(__('Document type'))->required()->live()
-                    ->options(fn () => collect(StockDocument::TYPES)->map(fn ($l) => __($l))->all())->default(fn () => request('type', 'issue'))
+                    ->options(fn () => collect(StockDocument::TYPES)->except('closing')->map(fn ($l) => __($l))->all())->default(fn () => request('type', 'issue'))
                     ->disabled(fn (?StockDocument $record) => (bool) $record?->exists)->dehydrated(),
                 Forms\Components\DatePicker::make('date')->label(__('Accounting date'))->default(now())->required()->native(false)->displayFormat('Y-m-d'),
                 Forms\Components\Select::make('branch_id')->label(__('Branch'))->options(fn () => Options::branches())->default(fn () => array_key_first(Options::branches()))->required(),

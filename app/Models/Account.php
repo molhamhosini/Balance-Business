@@ -34,6 +34,7 @@ class Account extends Model
         'inventory' => 'المخزون (افتراضي للأصناف)',
         'cogs' => 'تكلفة المبيعات (افتراضي للأصناف)',
         'freight_in' => 'تكاليف الشحن والتخليص',
+        'purchase_returns' => 'مردودات المشتريات (الجرد الدوري)',
         'depreciation' => 'مصروف الإهلاك',
         'asset_gain' => 'أرباح بيع أصول',
         'asset_loss' => 'خسائر بيع أصول',
