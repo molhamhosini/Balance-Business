@@ -41,6 +41,7 @@ class VoucherService
         }
         $this->validateShape($v);
         $this->computeTotals($v);
+        app(InvoiceService::class)->validatePlanned($v);
         $before = $v->exists ? $v->getOriginal() : null;
         $v->created_by ??= $user->id;
         $v->status = 'draft';

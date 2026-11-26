@@ -19,7 +19,7 @@ class Voucher extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['date' => 'date', 'cheque_due_date' => 'date', 'posted_at' => 'datetime', 'amount' => 'decimal:2', 'tax_amount' => 'decimal:2', 'total' => 'decimal:2'];
+    protected $casts = ['date' => 'date', 'cheque_due_date' => 'date', 'posted_at' => 'datetime', 'amount' => 'decimal:2', 'tax_amount' => 'decimal:2', 'total' => 'decimal:2', 'planned_allocations' => 'array'];
 
     protected static function booted(): void
     {

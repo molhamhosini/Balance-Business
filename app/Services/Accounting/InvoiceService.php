@@ -562,17 +562,66 @@ class InvoiceService
         });
     }
 
-    /** Called by VoucherService after posting: settle the linked invoice. */
+    /** Called by VoucherService after posting: settle the linked invoice and the invoices chosen on the voucher. */
     public function allocateLinked(Voucher $v, User $user): void
     {
         $inv = $v->paysInvoice;
-        if (! $inv) {
+        if ($inv) {
+            $amount = min($inv->openCents(), $this->unallocatedCents($v));
+            if ($amount > 0) {
+                $this->allocate($v, [$inv->id => Money::fromCents($amount)], $user, authorized: true);
+            }
+        }
+        foreach ($v->planned_allocations ?? [] as $p) {
+            $target = Invoice::find($p['invoice_id'] ?? null);
+            $amount = $target ? min(Money::toCents($p['amount'] ?? 0), $target->openCents(), $this->unallocatedCents($v)) : 0;
+            if ($amount > 0) {
+                $this->allocate($v, [$target->id => Money::fromCents($amount)], $user, authorized: true);
+            }
+        }
+    }
+
+    /** Open (unsettled) invoices a voucher of this type can settle for a party, oldest due first. */
+    public function openInvoicesFor(?int $partyId, string $voucherType, ?int $exceptVoucherId = null)
+    {
+        if (! $partyId) {
+            return collect();
+        }
+
+        return Invoice::where('party_id', $partyId)->where('status', 'posted')->where('payment', 'credit')
+            ->whereIn('kind', $voucherType === 'payment' ? ['purchase', 'sale_return'] : ['sale', 'purchase_return'])
+            ->orderBy('due_date')->orderBy('id')->get()->filter(fn ($i) => $i->openCents() > 0)->values();
+    }
+
+    /** Check the invoices chosen on a draft voucher: same party, right kind, within each open balance and the voucher total. */
+    public function validatePlanned(Voucher $v): void
+    {
+        $planned = collect($v->planned_allocations ?? [])->filter(fn ($p) => Money::toCents($p['amount'] ?? 0) > 0)->values();
+        if ($planned->isEmpty()) {
+            $v->planned_allocations = null;
+
             return;
         }
-        $amount = min($inv->openCents(), $this->unallocatedCents($v));
-        if ($amount > 0) {
-            $this->allocate($v, [$inv->id => Money::fromCents($amount)], $user, authorized: true);
+        if (! $v->party_id) {
+            throw new AccountingException(__('Choose the customer or supplier of the invoices.'));
         }
+        $open = $this->openInvoicesFor($v->party_id, $v->type)->keyBy('id');
+        $sum = 0;
+        foreach ($planned as $p) {
+            $inv = $open->get((int) $p['invoice_id']);
+            if (! $inv) {
+                throw new AccountingException(__('Invoice :n cannot be settled by this voucher.', ['n' => Invoice::find($p['invoice_id'])?->display_number ?? $p['invoice_id']]));
+            }
+            $cents = Money::toCents($p['amount']);
+            if ($cents > $inv->openCents()) {
+                throw new AccountingException(__('Amount exceeds the open balance of :n (:o).', ['n' => $inv->number, 'o' => Money::format($inv->openCents())]));
+            }
+            $sum += $cents;
+        }
+        if ($sum > Money::toCents($v->total)) {
+            throw new AccountingException(__('Allocations exceed the voucher amount.'));
+        }
+        $v->planned_allocations = $planned->map(fn ($p) => ['invoice_id' => (int) $p['invoice_id'], 'amount' => Money::fromCents(Money::toCents($p['amount']))])->all();
     }
 
     /**

@@ -240,5 +240,14 @@
     "محوّل إلى فاتورة": "Converted to invoice",
     "عرض سعر": "Quotation",
     "إرسال عرض سعر": "Quotation sent",
-    "تحويل إلى فاتورة": "Converted to invoice"
+    "تحويل إلى فاتورة": "Converted to invoice",
+    "Invoices to settle": "Invoices to settle",
+    "Choose the supplier bills this payment settles. The amount is filled from your choice.": "Choose the supplier bills this payment settles. The amount is filled from your choice.",
+    "Choose the customer invoices this receipt settles. The amount is filled from your choice.": "Choose the customer invoices this receipt settles. The amount is filled from your choice.",
+    "Search open invoices": "Search open invoices",
+    "Type an invoice number": "Type an invoice number",
+    "Select all": "Select all",
+    "Amount paid": "Amount paid",
+    "Will settle": "Will settle",
+    "Choose the customer or supplier of the invoices.": "Choose the customer or supplier of the invoices."
 }

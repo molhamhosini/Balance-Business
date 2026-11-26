@@ -57,7 +57,11 @@ class VoucherResource extends Resource
                     ->options(fn () => collect(Voucher::TYPES)->map(fn ($l) => __($l))->all())
                     ->colors(['receipt' => 'success', 'payment' => 'danger'])
                     ->icons(['receipt' => 'heroicon-o-arrow-down-tray', 'payment' => 'heroicon-o-arrow-up-tray'])
-                    ->default(fn () => request('type', 'receipt'))->live(),
+                    ->default(fn () => request('type', 'receipt'))->live()
+                    ->afterStateUpdated(function (Forms\Set $set) {
+                        $set('settle_invoice_ids', []);
+                        $set('planned_allocations', []);
+                    }),
                 Forms\Components\Select::make('branch_id')->label(__('Branch'))->options(fn () => Options::branches())->default(fn () => array_key_first(Options::branches()))->required(),
                 Forms\Components\DatePicker::make('date')->label(__('Accounting date'))->default(now())->required()->native(false)->displayFormat('Y-m-d'),
                 Forms\Components\Select::make('cash_account_id')->label(fn (Get $get) => $get('type') === 'payment' ? __('Paid from (cash / bank)') : __('Received into (cash / bank)'))
@@ -70,12 +74,42 @@ class VoucherResource extends Resource
                             $set('counter_account_id', $p->account_id);
                             $set('party_name', $p->name);
                         }
+                        $set('settle_invoice_ids', []);
+                        $set('planned_allocations', []);
                     })
                     ->helperText(__('Optional. Settles invoices of this customer/supplier; the counter account becomes their control account.')),
                 Forms\Components\Select::make('counter_account_id')->label(fn (Get $get) => $get('type') === 'payment' ? __('Expense / supplier account') : __('Revenue / customer account'))
                     ->options(fn () => Options::postableAccounts())->searchable()->required()->disabled(fn (Get $get) => filled($get('party_id')))->dehydrated(),
                 Forms\Components\TextInput::make('party_name')->label(fn (Get $get) => $get('type') === 'payment' ? __('Paid to') : __('Received from')),
             ]),
+            Forms\Components\Section::make(__('Invoices to settle'))->visible(fn (Get $get) => filled($get('party_id')))
+                ->description(fn (Get $get) => $get('type') === 'payment' ? __('Choose the supplier bills this payment settles. The amount is filled from your choice.') : __('Choose the customer invoices this receipt settles. The amount is filled from your choice.'))
+                ->schema([
+                    Forms\Components\Select::make('settle_invoice_ids')->label(__('Search open invoices'))->multiple()->searchable()->live()->dehydrated(false)
+                        ->placeholder(__('Type an invoice number'))
+                        ->options(fn (Get $get) => static::openInvoiceOptions($get))
+                        ->noSearchResultsMessage(__('No open invoices for this party.'))
+                        ->afterStateUpdated(fn ($state, Get $get, Forms\Set $set) => static::syncSettlements((array) $state, $get, $set))
+                        ->hintAction(Forms\Components\Actions\Action::make('selectAll')->label(__('Select all'))->icon('heroicon-m-check')
+                            ->action(function (Get $get, Forms\Set $set) {
+                                $ids = array_map('strval', array_keys(static::openInvoiceOptions($get)));
+                                $set('settle_invoice_ids', $ids);
+                                static::syncSettlements($ids, $get, $set);
+                            })),
+                    Forms\Components\Repeater::make('planned_allocations')->hiddenLabel()->addable(false)->deletable(false)->reorderable(false)->columns(4)
+                        ->visible(fn (Get $get) => filled($get('settle_invoice_ids')))
+                        ->schema([
+                            Forms\Components\Hidden::make('invoice_id'),
+                            Forms\Components\Placeholder::make('inv')->label(__('Invoice'))
+                                ->content(fn (Get $get) => ($i = \App\Models\Invoice::find($get('invoice_id'))) ? $i->display_number.' · '.$i->date->format('Y-m-d') : '—'),
+                            Forms\Components\Placeholder::make('due')->label(__('Due date'))
+                                ->content(fn (Get $get) => \App\Models\Invoice::find($get('invoice_id'))?->due_date?->format('Y-m-d') ?? '—'),
+                            Forms\Components\Placeholder::make('open')->label(__('Amount due'))
+                                ->content(fn (Get $get) => ($i = \App\Models\Invoice::find($get('invoice_id'))) ? Money::format($i->openCents()) : '—'),
+                            Forms\Components\TextInput::make('amount')->label(__('Amount paid'))->numeric()->minValue(0.01)->required()->live(onBlur: true)
+                                ->afterStateUpdated(fn (Get $get, Forms\Set $set) => $set('../../amount', Money::fromCents(collect($get('../../planned_allocations') ?? [])->sum(fn ($r) => Money::toCents($r['amount'] ?: 0))))),
+                        ]),
+                ]),
             Forms\Components\Section::make(__('Amount'))->columns(4)->schema([
                 Forms\Components\TextInput::make('amount')->label(__('Amount before VAT'))->numeric()->minValue(0.01)->required()->live(debounce: 400),
                 Forms\Components\Select::make('tax_code_id')->label(__('Tax code'))->options(fn () => Options::taxCodes())->live()
@@ -90,6 +124,30 @@ class VoucherResource extends Resource
                 Forms\Components\TextInput::make('description')->label(__('Description'))->columnSpan(3),
             ]),
         ]);
+    }
+
+    /** Open invoices of the chosen party that this voucher type can settle: id => "number · date · due". */
+    public static function openInvoiceOptions(Get $get): array
+    {
+        return app(InvoiceService::class)->openInvoicesFor($get('party_id') ? (int) $get('party_id') : null, (string) $get('type'))
+            ->mapWithKeys(fn ($i) => [$i->id => $i->display_number.' · '.$i->date->format('Y-m-d').' · '.__('Amount due').' '.Money::format($i->openCents())])->all();
+    }
+
+    /** Rebuild the settlement rows from the chosen invoices (keeping typed amounts) and set the voucher amount to their sum. */
+    public static function syncSettlements(array $ids, Get $get, Forms\Set $set): void
+    {
+        $typed = collect($get('planned_allocations') ?? [])->keyBy(fn ($r) => (string) ($r['invoice_id'] ?? ''));
+        $open = app(InvoiceService::class)->openInvoicesFor($get('party_id') ? (int) $get('party_id') : null, (string) $get('type'))->keyBy('id');
+        $rows = [];
+        foreach ($ids as $id) {
+            if ($inv = $open->get((int) $id)) {
+                $rows[(string) \Illuminate\Support\Str::uuid()] = ['invoice_id' => $inv->id, 'amount' => $typed->get((string) $inv->id)['amount'] ?? Money::fromCents($inv->openCents())];
+            }
+        }
+        $set('planned_allocations', $rows);
+        if ($rows) {
+            $set('amount', Money::fromCents(collect($rows)->sum(fn ($r) => Money::toCents($r['amount'] ?: 0))));
+        }
     }
 
     private static function previewTax(Get $get): int
@@ -108,6 +166,8 @@ class VoucherResource extends Resource
                     $r->journalEntry?->reversedBy ? ['icon' => 'heroicon-o-arrow-uturn-left', 'label' => __('Reversal entry'), 'value' => $r->journalEntry->reversedBy->number, 'url' => JournalEntryResource::getUrl('view', ['record' => $r->journalEntry->reversedBy])] : null,
                     ...$r->allocations()->with('invoice')->get()->map(fn ($a) => ['icon' => 'heroicon-o-document-check', 'label' => __('Settles').' '.Money::format($a->amount), 'value' => $a->invoice->number,
                         'url' => ($a->invoice->isSale() ? SalesInvoiceResource::class : PurchaseInvoiceResource::class)::getUrl('view', ['record' => $a->invoice])])->all(),
+                    ...($r->status === 'draft' ? collect($r->planned_allocations ?? [])->map(fn ($p) => ($i = \App\Models\Invoice::find($p['invoice_id'])) ? ['icon' => 'heroicon-o-document-text', 'label' => __('Will settle').' '.Money::format($p['amount']), 'value' => $i->display_number,
+                        'url' => ($i->isSale() ? SalesInvoiceResource::class : PurchaseInvoiceResource::class)::getUrl('view', ['record' => $i])] : null)->filter()->values()->all() : []),
                     $r->party_id && $r->status === 'posted' && ($left = app(InvoiceService::class)->unallocatedCents($r)) > 0 ? ['icon' => 'heroicon-o-exclamation-circle', 'label' => __('Unallocated (advance)'), 'value' => Money::format($left), 'url' => '#'] : null,
                     ['icon' => 'heroicon-o-printer', 'label' => __('Print'), 'value' => '', 'url' => route('voucher.print', $r)],
                 ]))),
