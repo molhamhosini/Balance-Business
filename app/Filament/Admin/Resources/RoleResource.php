@@ -34,7 +34,7 @@ class RoleResource extends Resource
         return $form->schema([
             Forms\Components\TextInput::make('name')->label(__('Name'))->required()->disabled(fn (?Role $record) => $record && isset(Perm::ROLES[$record->name])),
             Forms\Components\CheckboxList::make('permissions')->label(__('Permissions'))->relationship('permissions', 'name')
-                ->getOptionLabelFromRecordUsing(fn ($p) => __(Perm::LABELS[$p->name] ?? $p->name))->columns(2)->bulkToggleable(),
+                ->getOptionLabelFromRecordUsing(fn ($record) => __(Perm::LABELS[$record->name] ?? $record->name))->columns(2)->bulkToggleable(),
         ]);
     }
 

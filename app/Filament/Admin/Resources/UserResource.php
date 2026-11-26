@@ -47,7 +47,7 @@ class UserResource extends Resource
                 ->required(fn (string $operation) => $operation === 'create')->dehydrated(fn ($state) => filled($state))->minLength(8),
             Forms\Components\Select::make('locale')->label(__('Language'))->options(['ar' => 'العربية', 'en' => 'English'])->default('ar'),
             Forms\Components\Select::make('roles')->label(__('Roles'))->multiple()->relationship('roles', 'name')->preload()
-                ->getOptionLabelFromRecordUsing(fn (Role $r) => __(Perm::ROLES[$r->name]['label'] ?? $r->name)),
+                ->getOptionLabelFromRecordUsing(fn (Role $record) => __(Perm::ROLES[$record->name]['label'] ?? $record->name)),
             Forms\Components\Select::make('companies')->label(__('Companies'))->multiple()->relationship('companies', 'name_ar')->preload()
                 ->default(fn () => [Filament::getTenant()->id]),
             Forms\Components\Select::make('branches')->label(__('Restrict to branches'))->multiple()->relationship('branches', 'name_ar')->preload()
