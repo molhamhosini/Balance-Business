@@ -22,6 +22,12 @@ class RestoreDatabase extends Command
         if (! $this->option('force') && ! $this->confirm('This replaces ALL current data. Continue?')) {
             return self::FAILURE;
         }
+        if (! \App\Support\SqlDump::available()) {
+            $n = app(\App\Support\SqlDump::class)->restore($file);
+            $this->info("Restored $n statements from ".$file);
+
+            return self::SUCCESS;
+        }
         $c = config('database.connections.'.config('database.default'));
         $cmd = sprintf('gunzip -c %s | mysql -h%s -P%s -u%s %s', escapeshellarg($file), escapeshellarg($c['host']), escapeshellarg((string) $c['port']), escapeshellarg($c['username']), escapeshellarg($c['database']));
         $p = Process::fromShellCommandline($cmd, null, ['MYSQL_PWD' => (string) $c['password']], null, 1200);

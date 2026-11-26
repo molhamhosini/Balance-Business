@@ -20,6 +20,19 @@ class BackupDatabase extends Command
         File::ensureDirectoryExists($dir);
         $file = $dir.'/'.$c['database'].'-'.now()->format('Y-m-d_His').'.sql.gz';
 
+        if (! \App\Support\SqlDump::available()) { // shared hosting: no proc_open, dump with PHP
+            try {
+                app(\App\Support\SqlDump::class)->dump($file);
+            } catch (\Throwable $e) {
+                $this->error('Backup failed: '.$e->getMessage());
+                @unlink($file);
+
+                return self::FAILURE;
+            }
+
+            return $this->prune($dir, $file);
+        }
+
         $cmd = sprintf('mysqldump --single-transaction --routines --triggers --no-tablespaces -h%s -P%s -u%s %s | gzip > %s',
             escapeshellarg($c['host']), escapeshellarg((string) $c['port']), escapeshellarg($c['username']), escapeshellarg($c['database']), escapeshellarg($file));
         $p = Process::fromShellCommandline($cmd, null, ['MYSQL_PWD' => (string) $c['password']], null, 600);
@@ -31,6 +44,11 @@ class BackupDatabase extends Command
             return self::FAILURE;
         }
 
+        return $this->prune($dir, $file);
+    }
+
+    private function prune(string $dir, string $file): int
+    {
         $files = collect(File::glob($dir.'/*.sql.gz'))->sort()->values();
         $files->slice(0, max(0, $files->count() - (int) $this->option('keep')))->each(fn ($f) => File::delete($f));
         $this->info('Backup written: '.$file);
