@@ -720,5 +720,6 @@
     "Type must be stock or service.": "النوع يجب أن يكون stock أو service.",
     "Usually an \"opening balances\" equity account; it is cleared when all opening balances are in.": "عادة حساب \"أرصدة افتتاحية\" ضمن حقوق الملكية، ويصبح صفراً بعد إدخال كل الأرصدة الافتتاحية.",
     "Warehouse :c not found.": "المستودع :c غير موجود.",
-    "What to import": "نوع البيانات"
+    "What to import": "نوع البيانات",
+    "Leave empty to number automatically.": "اتركه فارغًا ليُرقّم تلقائيًا."
 }
