@@ -12,12 +12,13 @@
 cd ~/domains/YOUR-DOMAIN
 git clone https://github.com/molhamhosini/Balance-Business.git app
 cd app
-composer install --no-dev --optimize-autoloader
+composer install --no-dev --optimize-autoloader --no-scripts   # Hostinger يعطّل proc_open
+php artisan package:discover
 cp .env.example .env
 php artisan key:generate
 nano .env   # APP_ENV=production, APP_DEBUG=false, APP_URL=https://YOUR-DOMAIN, DB_*, SEED_PASSWORD
 php artisan migrate --seed --force
-php artisan storage:link
+ln -s ../storage/app/public public/storage   # بدلاً من storage:link
 php artisan filament:optimize && php artisan optimize
 ```
 
@@ -29,11 +30,14 @@ mv public_html public_html_old
 ln -s app/public public_html
 ```
 
-5. **Advanced ← Cron Jobs**: أضف مهمة كل دقيقة (لازمة للنسخ الاحتياطي اليومي):
+5. **Advanced ← Cron Jobs**: أضف مهمة يومية الساعة 2:00 صباحاً للنسخ الاحتياطي. استخدم مسار PHP الذي يظهره الأمر `which php`
+   (لأن `schedule:run` يحتاج `proc_open` المعطّل على Hostinger، نشغّل أمر النسخ مباشرة):
 
 ```
-/usr/bin/php /home/USER/domains/YOUR-DOMAIN/app/artisan schedule:run
+/opt/alt/php83/usr/bin/php /home/USER/domains/YOUR-DOMAIN/app/artisan backup:database
 ```
+
+عند غياب `mysqldump` أو `proc_open` يأخذ النظام النسخة الاحتياطية ويسترجعها بـ PHP مباشرة.
 
 6. سجّل الدخول على `https://YOUR-DOMAIN/admin` بحساب `admin@example.com` وغيّر كلمات المرور، ثم من
    **إعدادات الشركة** أدخل الاسم والرقم الضريبي والشعار لكل شركة، ومن **الفروع** تأكد من الإمارة.
@@ -44,7 +48,8 @@ ln -s app/public public_html
 cd ~/domains/YOUR-DOMAIN/app
 php artisan down
 git pull
-composer install --no-dev --optimize-autoloader
+composer install --no-dev --optimize-autoloader --no-scripts
+php artisan package:discover
 php artisan migrate --force
 php artisan optimize
 php artisan up
