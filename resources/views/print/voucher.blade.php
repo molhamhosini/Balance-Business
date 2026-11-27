@@ -19,8 +19,10 @@ table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid
 </header>
 <table>
   <tr><th>{{ $v->type === 'payment' ? __('Paid to') : __('Received from') }}</th><td>{{ $v->party_name }}</td></tr>
+  @if(\App\Support\Money::toCents($v->tax_amount) !== 0)
   <tr><th>{{ __('Amount before VAT') }}</th><td>{{ \App\Support\Money::format($v->amount) }} {{ $v->company->base_currency }}</td></tr>
   <tr><th>{{ __('VAT') }} ({{ $v->taxCode?->code ?? '—' }})</th><td>{{ \App\Support\Money::format($v->tax_amount) }}</td></tr>
+  @endif
   <tr><th>{{ __('Total') }}</th><td><b>{{ \App\Support\Money::format($v->total) }} {{ $v->company->base_currency }}</b></td></tr>
   <tr><th>{{ __('Payment method') }}</th><td>{{ __(\App\Models\Voucher::METHODS[$v->payment_method] ?? $v->payment_method) }} {{ $v->cheque_number }}</td></tr>
   <tr><th>{{ __('Cash / bank') }}</th><td>{{ $v->cashAccount->label }}</td></tr>

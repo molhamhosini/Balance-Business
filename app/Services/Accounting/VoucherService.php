@@ -40,6 +40,8 @@ class VoucherService
             throw new AccountingException(__('A posted voucher cannot be modified. Cancel it with a reversing entry.'));
         }
         $this->validateShape($v);
+        $v->tax_code_id = null;
+        $v->unsetRelation('taxCode'); // no VAT on receipts/payments: VAT is charged on sales and purchase invoices
         $this->computeTotals($v);
         app(InvoiceService::class)->validatePlanned($v);
         $before = $v->exists ? $v->getOriginal() : null;
