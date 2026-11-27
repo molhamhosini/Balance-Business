@@ -133,11 +133,13 @@ class AcceptanceTest extends AccountingTestCase
     public function test_receipt_voucher_generates_the_documented_entry(): void
     {
         $this->postedOpening();
-        // Cash sale 1,000 + 5% VAT: Dr cash 1,050 / Cr sales 1,000 / Cr VAT output 50 (example from §3)
+        // Vouchers carry no VAT (VAT belongs on sales/purchase invoices): Dr cash 1,000 / Cr counter account 1,000.
         $v = $this->voucher(['type' => 'receipt', 'cash_account_id' => $this->acc('1114'), 'counter_account_id' => $this->acc('4117'), 'amount' => '1000', 'tax_code_id' => $this->tax('SR')]);
+        $this->assertNull($v->tax_code_id, 'a tax code sent with a voucher is dropped');
+        $this->assertSame('1000.00', $v->total);
         $v = $this->vouchers()->post($v, $this->accountant);
         $lines = $v->journalEntry->lines->map(fn ($l) => [$l->account->code, (string) $l->debit, (string) $l->credit])->all();
-        $this->assertSame([['1114', '1050.00', '0.00'], ['4117', '0.00', '1000.00'], ['2131', '0.00', '50.00']], $lines);
+        $this->assertSame([['1114', '1000.00', '0.00'], ['4117', '0.00', '1000.00']], $lines);
         $this->assertSame('RV-2026-00001', $v->number);
         $this->assertTrue($v->journalEntry->isAutomatic());
     }
@@ -148,7 +150,7 @@ class AcceptanceTest extends AccountingTestCase
         $v = $this->voucher(['type' => 'payment', 'cash_account_id' => $this->acc('1114'), 'counter_account_id' => $this->acc('6220'), 'amount' => '200', 'tax_code_id' => $this->tax('SR')]);
         $v = $this->vouchers()->post($v, $this->accountant);
         $lines = $v->journalEntry->lines->map(fn ($l) => [$l->account->code, (string) $l->debit, (string) $l->credit])->all();
-        $this->assertSame([['6220', '200.00', '0.00'], ['1161', '10.00', '0.00'], ['1114', '0.00', '210.00']], $lines);
+        $this->assertSame([['6220', '200.00', '0.00'], ['1114', '0.00', '200.00']], $lines);
     }
 
     public function test_automatic_entry_cannot_be_posted_or_reversed_by_hand(): void
@@ -242,11 +244,22 @@ class AcceptanceTest extends AccountingTestCase
     public function test_vat_201_boxes(): void
     {
         $this->postedOpening();
-        $this->vouchers()->post($this->voucher(['type' => 'receipt', 'cash_account_id' => $this->acc('1114'), 'counter_account_id' => $this->acc('4117'), 'amount' => '1000', 'tax_code_id' => $this->tax('SR')]), $this->accountant);
-        $this->vouchers()->post($this->voucher(['type' => 'receipt', 'cash_account_id' => $this->acc('1114'), 'counter_account_id' => $this->acc('4113'), 'amount' => '400', 'tax_code_id' => $this->tax('ZR')]), $this->accountant);
-        $p = $this->vouchers()->post($this->voucher(['type' => 'payment', 'cash_account_id' => $this->acc('1121'), 'counter_account_id' => $this->acc('6220'), 'amount' => '200', 'tax_code_id' => $this->tax('SR')]), $this->accountant);
-        // A cancelled voucher nets out of the return
-        $this->vouchers()->cancel($this->vouchers()->post($this->voucher(['type' => 'receipt', 'cash_account_id' => $this->acc('1114'), 'counter_account_id' => $this->acc('4117'), 'amount' => '500', 'tax_code_id' => $this->tax('SR')]), $this->accountant), $this->chief, 'x');
+        $parties = app(\App\Services\Accounting\PartyService::class);
+        $cust = $parties->create($this->company, ['type' => 'customer', 'name_ar' => 'عميل', 'payment_terms_days' => 30], $this->accountant);
+        $supp = $parties->create($this->company, ['type' => 'supplier', 'name_ar' => 'مورد', 'payment_terms_days' => 30], $this->accountant);
+        $inv = app(\App\Services\Accounting\InvoiceService::class);
+        $doc = fn ($kind, $party, $acc, $amount, $tax) => $inv->post($inv->saveDraft(new \App\Models\Invoice(['company_id' => $this->company->id, 'branch_id' => $this->company->branches()->orderBy('id')->first()->id, 'kind' => $kind, 'payment' => 'credit', 'party_id' => $party->id, 'date' => '2026-11-12']),
+            [['account_id' => $this->acc($acc), 'description' => 'x', 'quantity' => 1, 'unit_price' => $amount, 'tax_code_id' => $this->tax($tax)]], $this->entry), $this->accountant);
+        $doc('sale', $cust, '4117', '1000', 'SR');
+        $doc('sale', $cust, '4113', '400', 'ZR');
+        $doc('purchase', $supp, '6220', '200', 'SR');
+        // A cancelled invoice nets out of the return
+        $inv->cancel($doc('sale', $cust, '4117', '500', 'SR'), $this->chief, 'x');
+        // A manual entry with a tax code (e.g. an asset or expense booked by hand) is ignored by the return.
+        $this->posting()->post($this->draft([
+            ['account_id' => $this->acc('6220'), 'debit' => '300', 'credit' => 0, 'tax_code_id' => $this->tax('SR')],
+            ['account_id' => $this->acc('1114'), 'debit' => 0, 'credit' => '300'],
+        ]), $this->accountant);
 
         $b = app(ReportService::class)->vat201($this->company, '2026-10-01', '2026-12-31');
         $this->assertSame([100000, 5000], [$b['1.1']['amount'], $b['1.1']['vat']], 'Abu Dhabi standard-rated');

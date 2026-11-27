@@ -111,11 +111,7 @@ class VoucherResource extends Resource
                         ]),
                 ]),
             Forms\Components\Section::make(__('Amount'))->columns(4)->schema([
-                Forms\Components\TextInput::make('amount')->label(__('Amount before VAT'))->numeric()->minValue(0.01)->required()->live(debounce: 400),
-                Forms\Components\Select::make('tax_code_id')->label(__('Tax code'))->options(fn () => Options::taxCodes())->live()
-                    ->default(fn () => TaxCode::where('company_id', Options::companyId())->where('code', 'OS')->value('id')),
-                Forms\Components\Placeholder::make('vat_preview')->label(__('VAT'))->content(fn (Get $get) => Money::format(static::previewTax($get))),
-                Forms\Components\Placeholder::make('total_preview')->label(__('Total'))->content(fn (Get $get) => Money::format(Money::toCents($get('amount') ?: 0) + static::previewTax($get))),
+                Forms\Components\TextInput::make('amount')->label(__('Amount'))->numeric()->minValue(0.01)->required(),
                 Forms\Components\Select::make('payment_method')->label(__('Payment method'))->options(fn () => collect(Voucher::METHODS)->map(fn ($l) => __($l))->all())->default(fn () => array_key_exists((string) request('method'), Voucher::METHODS) ? request('method') : 'cash')->live()->required(),
                 Forms\Components\TextInput::make('cheque_number')->label(__('Cheque number'))->visible(fn (Get $get) => $get('payment_method') === 'cheque')->required(fn (Get $get) => $get('payment_method') === 'cheque'),
                 Forms\Components\TextInput::make('cheque_bank')->label(__('Drawn on bank'))->visible(fn (Get $get) => $get('payment_method') === 'cheque'),
@@ -150,13 +146,6 @@ class VoucherResource extends Resource
         }
     }
 
-    private static function previewTax(Get $get): int
-    {
-        $code = $get('tax_code_id') ? TaxCode::find($get('tax_code_id')) : null;
-
-        return $code && $code->type === 'standard' ? Money::percent(Money::toCents($get('amount') ?: 0), (string) $code->rate) : 0;
-    }
-
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
@@ -181,9 +170,8 @@ class VoucherResource extends Resource
                 Infolists\Components\TextEntry::make('payment_method')->label(__('Payment method'))->formatStateUsing(fn ($state) => __(Voucher::METHODS[$state] ?? $state)),
                 Infolists\Components\TextEntry::make('cashAccount.label')->label(__('Cash / bank')),
                 Infolists\Components\TextEntry::make('counterAccount.label')->label(__('Counter account'))->columnSpan(2),
-                Infolists\Components\TextEntry::make('taxCode.code')->label(__('Tax code'))->placeholder('—'),
-                Infolists\Components\TextEntry::make('amount')->label(__('Amount before VAT'))->numeric(2, locale: 'en'),
-                Infolists\Components\TextEntry::make('tax_amount')->label(__('VAT'))->numeric(2, locale: 'en'),
+                Infolists\Components\TextEntry::make('taxCode.code')->label(__('Tax code'))->visible(fn (Voucher $r) => (bool) $r->tax_code_id),
+                Infolists\Components\TextEntry::make('tax_amount')->label(__('VAT'))->numeric(2, locale: 'en')->visible(fn (Voucher $r) => Money::toCents($r->tax_amount) !== 0),
                 Infolists\Components\TextEntry::make('total')->label(__('Total'))->numeric(2, locale: 'en')->weight('bold')->size('lg'),
                 Infolists\Components\TextEntry::make('cheque_number')->label(__('Cheque number'))->visible(fn (Voucher $r) => $r->payment_method === 'cheque')
                     ->suffix(fn (Voucher $r) => $r->cheque_status ? ' · '.__(Voucher::CHEQUE_STATUSES[$r->cheque_status]).($r->cheque_due_date ? ' · '.$r->cheque_due_date->format('Y-m-d') : '') : ''),
