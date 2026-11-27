@@ -250,6 +250,10 @@ class ReportService
         $rows = $this->base($company, null)->join('tax_codes as t', 't.id', '=', 'l.tax_code_id')
             ->join('branches as b', 'b.id', '=', 'e.branch_id')
             ->whereBetween('e.date', [$from, $to])->whereNotNull('l.tax_direction')
+            // Only sales/purchase invoices and their credit/debit notes feed the return (and the reversal of a
+            // cancelled one); manual entries and vouchers are ignored even if they carry a tax code.
+            ->where(fn ($q) => $q->where('e.type', 'invoice')->orWhere(fn ($q) => $q->where('e.type', 'reversal')
+                ->whereExists(fn ($s) => $s->from('journal_entries as o')->whereColumn('o.reversed_by_id', 'e.id')->where('o.type', 'invoice'))))
             ->get(['t.type', 'b.emirate', 'l.debit', 'l.credit', 'l.is_tax_line', 'l.tax_direction']);
 
         foreach ($rows as $r) {

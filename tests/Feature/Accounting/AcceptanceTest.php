@@ -255,6 +255,11 @@ class AcceptanceTest extends AccountingTestCase
         $doc('purchase', $supp, '6220', '200', 'SR');
         // A cancelled invoice nets out of the return
         $inv->cancel($doc('sale', $cust, '4117', '500', 'SR'), $this->chief, 'x');
+        // A manual entry with a tax code (e.g. an asset or expense booked by hand) is ignored by the return.
+        $this->posting()->post($this->draft([
+            ['account_id' => $this->acc('6220'), 'debit' => '300', 'credit' => 0, 'tax_code_id' => $this->tax('SR')],
+            ['account_id' => $this->acc('1114'), 'debit' => 0, 'credit' => '300'],
+        ]), $this->accountant);
 
         $b = app(ReportService::class)->vat201($this->company, '2026-10-01', '2026-12-31');
         $this->assertSame([100000, 5000], [$b['1.1']['amount'], $b['1.1']['vat']], 'Abu Dhabi standard-rated');
