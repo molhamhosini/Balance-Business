@@ -138,6 +138,15 @@ abstract class ReportPage extends Page implements HasForms
     }
 
     /** PDF built from the same rows as the Excel export (pure PHP, Arabic shaping and RTL). */
+    /** Local path of the company logo for mPDF (it reads files directly), or null. */
+    protected function logoFile(): ?string
+    {
+        $p = $this->company()->logo_path;
+        $file = $p ? \Illuminate\Support\Facades\Storage::disk('public')->path($p) : null;
+
+        return $file && is_file($file) ? $file : null;
+    }
+
     public function pdfBinary(): string
     {
         [$headers, $rows] = $this->exportRows();
@@ -157,7 +166,7 @@ abstract class ReportPage extends Page implements HasForms
             $out[] = ['cells' => $cells ?: [['t' => ' ', 'n' => false]], 'bold' => $bold];
         }
         $html = view('pdf.report', [
-            'company' => $this->company()->name, 'title' => strip_tags((string) $this->getTitle()), 'subtitle' => $this->exportSubtitle(),
+            'company' => $this->company()->name, 'logo' => $this->logoFile(), 'trn' => $this->company()->trn, 'title' => strip_tags((string) $this->getTitle()), 'subtitle' => $this->exportSubtitle(),
             'headers' => $headers, 'rows' => $out, 'numeric' => array_keys($numericCol),
         ])->render();
 

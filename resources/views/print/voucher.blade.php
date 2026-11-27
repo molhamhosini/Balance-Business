@@ -13,7 +13,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid
 <body>
 <button onclick="window.print()">{{ __('Print') }}</button>
 <header>
-  <div><h1>{{ $v->company->name }}</h1><div>{{ __('TRN') }}: {{ $v->company->trn ?? '—' }}</div><div>{{ $v->company->address }}</div></div>
+  <div>@if($v->company->logo_path)<img src="{{ asset('storage/'.$v->company->logo_path) }}" alt="" style="max-height:70px;max-width:180px;display:block;margin-bottom:6px">@endif<h1>{{ $v->company->name }}</h1><div>{{ __('TRN') }}: {{ $v->company->trn ?? '—' }}</div><div>{{ $v->company->address }}</div></div>
   <div style="text-align:end"><h2>{{ __(\App\Models\Voucher::TYPES[$v->type]) }}</h2><div><b>{{ $v->display_number }}</b></div><div>{{ $v->date->format('Y-m-d') }}</div>
   @if($v->status === 'cancelled')<div class="stamp">{{ __('Cancelled') }}</div>@elseif($v->status === 'draft')<div class="stamp">{{ __('Draft') }}</div>@endif</div>
 </header>
