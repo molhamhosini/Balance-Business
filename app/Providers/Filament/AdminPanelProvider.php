@@ -67,6 +67,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn () => route('locale.switch', app()->getLocale() === 'ar' ? 'en' : 'ar')),
             ])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => view('filament.components.styles'))
+            ->renderHook(PanelsRenderHook::PAGE_START, fn () => view('filament.components.print-letterhead'))
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\\Filament\\Admin\\Pages')
             ->pages([Pages\Dashboard::class])

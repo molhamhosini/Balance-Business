@@ -43,4 +43,14 @@
 .bb-totals .grand{border-top:2px solid currentColor;padding-top:6px;font-size:17px}
 .bb-totals .due b{color:rgb(225 29 72)}
 .bb-aging td.late{color:rgb(225 29 72)}
+/* Letterhead (logo + company) shown only when a page is printed; panel chrome hidden on paper. */
+.bb-letterhead{display:none}
+@media print{
+  .bb-letterhead{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0f766e;padding-bottom:10px;margin-bottom:14px;font-size:12px;color:#111}
+  .bb-letterhead img{max-height:64px;max-width:170px}
+  .bb-letterhead-name{font-size:18px;font-weight:700}
+  .fi-sidebar,.fi-topbar,.fi-header-actions,.fi-breadcrumbs,.fi-sidebar-close-overlay{display:none!important}
+  .fi-main-ctn{margin:0!important;padding:0!important}
+  .fi-main{max-width:none!important;padding:0!important}
+}
 </style>

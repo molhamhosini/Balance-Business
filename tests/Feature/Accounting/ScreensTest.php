@@ -128,6 +128,19 @@ class ScreensTest extends AccountingTestCase
             ->assertOk()->assertSee('"type":"payment"')->assertSee('"payment_method":"cheque"');
     }
 
+    public function test_company_logo_appears_on_report_pdf_print_and_vouchers(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        \Illuminate\Support\Facades\Storage::disk('public')->put('logos/l.png', $png);
+        $this->company->update(['logo_path' => 'logos/l.png']);
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+        $pdf = \Livewire\Livewire::test(Pages\TrialBalance::class)->instance()->pdfBinary();
+        $this->assertStringContainsString('/Subtype /Image', $pdf, 'logo embedded in the PDF');
+        $this->get(Pages\TrialBalance::getUrl(['tenant' => $this->company]))->assertOk()->assertSee('storage/logos/l.png');
+    }
+
     public function test_every_report_exports_to_excel_and_pdf(): void
     {
         $this->actingAs($this->chief);

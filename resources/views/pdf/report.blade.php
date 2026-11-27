@@ -14,7 +14,10 @@
 </style>
 </head>
 <body>
-    <h1>{{ $company }}</h1>
+    <table style="margin-bottom:6px"><tr>
+        @if (! empty($logo))<td style="width:1%;border:0;padding:0 0 0 8px"><img src="{{ $logo }}" style="height:48px"></td>@endif
+        <td style="border:0;padding:0"><h1>{{ $company }}</h1>@if (! empty($trn))<div class="sub">{{ __('TRN') }}: {{ $trn }}</div>@endif</td>
+    </tr></table>
     <div><b>{{ $title }}</b></div>
     <div class="sub">{{ $subtitle }}</div>
     <table>
