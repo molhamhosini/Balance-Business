@@ -43,7 +43,7 @@ class DataImport extends Page implements HasForms
 
     public function mount(): void
     {
-        $this->form->fill(['type' => request('type', 'customers'), 'date' => now()->toDateString()]);
+        $this->form->fill(['type' => request('type', 'customers'), 'date' => now()->toDateString(), 'post' => true]);
     }
 
     public function form(Form $form): Form
@@ -57,6 +57,9 @@ class DataImport extends Page implements HasForms
                 Forms\Components\Select::make('counter_account_id')->label(__('Opening balance account'))->visible($opening)->required($opening)->searchable()
                     ->options(fn () => Options::postableAccounts(fn ($q) => $q->where('class', 'equity')))
                     ->helperText(__('Usually an "opening balances" equity account; it is cleared when all opening balances are in.')),
+                Forms\Components\Toggle::make('post')->label(__('Confirm (post) the invoices after import'))->default(true)->inline(false)
+                    ->visible(fn (Get $get) => in_array($get('type'), ['sales_invoices', 'purchase_invoices'], true))
+                    ->helperText(__('Off: they are imported as drafts to review and confirm yourself.')),
                 Forms\Components\DatePicker::make('date')->label(__('Opening stock date'))->visible(fn (Get $get) => $get('type') === 'opening_stock')->native(false)->displayFormat('Y-m-d'),
                 Forms\Components\FileUpload::make('file')->label(__('Excel file'))->disk('local')->directory('imports')->required()->columnSpanFull()
                     ->acceptedFileTypes(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'text/csv']),
@@ -88,7 +91,7 @@ class DataImport extends Page implements HasForms
         $svc = app(DataImporter::class);
         try {
             $rows = $svc->readRows(Storage::disk('local')->path($d['file']), $d['type']);
-            $this->result = $svc->import(Filament::getTenant(), $d['type'], $rows, auth()->user(), ['counter_account_id' => $d['counter_account_id'] ?? null, 'date' => $d['date'] ?? null]) + ['rows' => count($rows), 'type' => $d['type']];
+            $this->result = $svc->import(Filament::getTenant(), $d['type'], $rows, auth()->user(), ['counter_account_id' => $d['counter_account_id'] ?? null, 'date' => $d['date'] ?? null, 'post' => (bool) ($d['post'] ?? true)]) + ['rows' => count($rows), 'type' => $d['type']];
             $n = Notification::make()->title(__('Import finished'))->body(__(':c added, :u updated', ['c' => $this->result['created'], 'u' => $this->result['updated']]));
             ($this->result['errors'] ? $n->warning() : $n->success())->send();
         } catch (AccountingException $e) {

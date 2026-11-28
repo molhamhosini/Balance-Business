@@ -836,5 +836,15 @@
     "Purchase order :n": "طلب شراء :n",
     "View and print the purchase order": "عرض وطباعة طلب الشراء",
     "Invoice language": "لغة الفاتورة",
-    "Report language": "لغة التقرير"
+    "Report language": "لغة التقرير",
+    "Imported invoice": "فاتورة مستوردة",
+    "Invoice :n": "الفاتورة :n",
+    "Invoice :n is already imported (:d).": "الفاتورة :n مستوردة سابقاً (:d).",
+    "Payment must be cash or credit.": "الدفع يجب أن يكون cash أو credit.",
+    "Account :c is not a cash box or bank account.": "الحساب :c ليس صندوقاً أو حساباً بنكياً.",
+    "Each line needs an item code or an account code.": "كل بند يحتاج رمز صنف أو رمز حساب.",
+    "Confirm (post) the invoices after import": "تأكيد (ترحيل) الفواتير بعد الاستيراد",
+    "Off: they are imported as drafts to review and confirm yourself.": "عند الإيقاف تُستورد كمسودات لتراجعها وتؤكدها بنفسك.",
+    "فواتير البيع": "فواتير البيع",
+    "فواتير الشراء": "فواتير الشراء"
 }

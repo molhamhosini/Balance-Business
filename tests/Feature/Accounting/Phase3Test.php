@@ -445,4 +445,61 @@ class Phase3Test extends AccountingTestCase
         $this->assertSame(525000, $old->openCents());
         $this->assertSame('0.00', (string) $old->tax_total);
     }
+
+    public function test_excel_import_of_sales_and_purchase_invoices(): void
+    {
+        $imp = app(\App\Services\Accounting\DataImporter::class);
+        $file = function (string $type, array $rows) use ($imp) {
+            $book = $imp->template($type);
+            $sheet = $book->getActiveSheet();
+            $keys = array_keys(\App\Services\Accounting\DataImporter::columns($type));
+            $sheet->removeRow(2);
+            foreach ($rows as $i => $r) {
+                foreach ($r as $k => $v) {
+                    $sheet->setCellValue([array_search($k, $keys, true) + 1, $i + 2], $v);
+                }
+            }
+            $path = tempnam(sys_get_temp_dir(), 'imp').'.xlsx';
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($path);
+
+            return $imp->readRows($path, $type);
+        };
+        $parties = app(\App\Services\Accounting\PartyService::class);
+        $c = $parties->create($this->company, ['type' => 'customer', 'name_ar' => 'فندق الواحة', 'payment_terms_days' => 30], $this->chief);
+        $s = $parties->create($this->company, ['type' => 'supplier', 'name_ar' => 'مزرعة النخيل', 'payment_terms_days' => 30], $this->chief);
+        $imp->import($this->company, 'items', $file('items', [['code' => 'P10', 'name_ar' => 'لحم غنم', 'unit' => 'كغ', 'sales_account' => '4117']]), $this->chief);
+
+        // purchase on credit: 2 lines in one bill; then a cash sale paid into the cash box
+        $r = $imp->import($this->company->fresh(), 'purchase_invoices', $file('purchase_invoices', [
+            ['number' => 'F-900', 'date' => '2026-11-03', 'party' => $s->code, 'item' => 'P10', 'quantity' => '100', 'unit_price' => '30'],
+            ['number' => 'F-900', 'date' => '2026-11-03', 'party' => $s->code, 'account' => '5111', 'description' => 'نقل', 'quantity' => '1', 'unit_price' => '200'],
+        ]), $this->chief);
+        $this->assertSame(1, $r['created'], json_encode($r['errors'], JSON_UNESCAPED_UNICODE));
+        $bill = Invoice::where('supplier_invoice_number', 'F-900')->first();
+        $this->assertSame('posted', $bill->status);
+        $this->assertCount(2, $bill->lines);
+        $this->assertSame('3360.00', (string) $bill->total);
+        $this->assertSame('100.000', (string) Item::where('code', 'P10')->first()->qty_on_hand);
+
+        $r = $imp->import($this->company->fresh(), 'sales_invoices', $file('sales_invoices', [
+            ['number' => 'S-1', 'date' => '2026-11-05', 'party' => 'فندق الواحة', 'payment' => 'cash', 'cash_account' => '1111', 'item' => 'P10', 'quantity' => '10', 'unit_price' => '50'],
+            ['number' => 'S-2', 'date' => '2026-11-06', 'party' => $c->code, 'payment' => 'cash', 'cash_account' => '4117', 'item' => 'P10', 'quantity' => '1', 'unit_price' => '50'],
+            ['number' => 'S-3', 'date' => '2026-11-06', 'party' => $c->code, 'item' => 'P10', 'quantity' => '2', 'unit_price' => '50', 'due_date' => '2026-12-20'],
+        ]), $this->chief, ['post' => false]);
+        $this->assertSame(2, $r['created'], json_encode($r['errors'], JSON_UNESCAPED_UNICODE));
+        $this->assertCount(1, $r['errors'], 'S-2: 4117 is not a cash account');
+        $sale = Invoice::where('description', 'like', '%S-1')->first();
+        $this->assertSame('draft', $sale->status);
+        $this->assertSame('cash', $sale->payment);
+        $this->assertSame($this->acc('1111'), $sale->cash_account_id);
+        $this->assertSame('525.00', (string) $sale->total);
+        $this->assertSame('2026-12-20', Invoice::where('description', 'like', '%S-3')->first()->due_date->toDateString());
+
+        // importing the same file again does not duplicate
+        $r = $imp->import($this->company->fresh(), 'purchase_invoices', $file('purchase_invoices', [
+            ['number' => 'F-900', 'date' => '2026-11-03', 'party' => $s->code, 'item' => 'P10', 'quantity' => '100', 'unit_price' => '30'],
+        ]), $this->chief);
+        $this->assertSame(0, $r['created']);
+        $this->assertCount(1, $r['errors']);
+    }
 }
