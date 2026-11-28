@@ -23,9 +23,7 @@ abstract class ViewInvoice extends ViewRecord
             $r::writeOffAction(),
             Actions\EditAction::make()->visible(fn () => $r::canEdit($this->record)),
             $r::creditNoteAction(),
-            Actions\Action::make('downloadPdf')->label(__('Download PDF'))->icon('heroicon-o-document-arrow-down')->color('gray')
-                ->action(fn () => response()->streamDownload(fn () => print (\App\Services\Documents\InvoiceExport::invoicePdf($this->record)),
-                    \App\Services\Documents\InvoiceExport::fileName($this->record), ['Content-Type' => 'application/pdf'])),
+            $r::printActions(),
             $r::sendActions(),
             $r::einvoiceActions(),
             $r::cancelAction(),
