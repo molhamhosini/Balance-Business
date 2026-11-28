@@ -13,6 +13,9 @@ class SqlDump
 {
     public const SEP = "\n-- @@end\n";
 
+    /** Data that must not travel with a backup: restoring old sessions would log everyone out. */
+    public const SKIP_DATA = ['sessions', 'cache', 'cache_locks', 'jobs', 'job_batches'];
+
     public static function available(): bool
     {
         return function_exists('proc_open') && ! in_array('proc_open', array_map('trim', explode(',', (string) ini_get('disable_functions'))), true);
@@ -31,6 +34,9 @@ class SqlDump
             $create = array_values((array) DB::selectOne("SHOW CREATE TABLE `$t`"))[1];
             $w("DROP TABLE IF EXISTS `$t`");
             $w($create);
+            if (in_array($t, self::SKIP_DATA, true)) {
+                continue;
+            }
             $batch = [];
             foreach (DB::table($t)->cursor() as $row) {
                 $batch[] = '('.implode(',', array_map(fn ($v) => $v === null ? 'NULL' : $pdo->quote((string) $v), (array) $row)).')';
@@ -64,7 +70,7 @@ class SqlDump
         DB::unprepared('SET FOREIGN_KEY_CHECKS=0');
         foreach ($parts as $stmt) {
             $stmt = trim(preg_replace('/^--[^\n]*\n?/m', '', $stmt));
-            if ($stmt === '' || str_starts_with($stmt, 'DELIMITER')) {
+            if ($stmt === '' || str_starts_with($stmt, 'DELIMITER') || $this->touchesSkipped($stmt)) {
                 continue;
             }
             DB::unprepared($stmt);
@@ -73,5 +79,17 @@ class SqlDump
         DB::unprepared('SET FOREIGN_KEY_CHECKS=1');
 
         return $n;
+    }
+
+    /** Keep the live sessions / cache tables as they are (so the person restoring stays signed in). */
+    private function touchesSkipped(string $stmt): bool
+    {
+        foreach (self::SKIP_DATA as $t) {
+            if (preg_match('/^(DROP TABLE IF EXISTS|CREATE TABLE|INSERT INTO|LOCK TABLES|ALTER TABLE)\s+`'.$t.'`/i', $stmt)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
