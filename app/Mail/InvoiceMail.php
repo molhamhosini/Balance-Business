@@ -10,13 +10,13 @@ use Illuminate\Mail\Mailables\Envelope;
 
 class InvoiceMail extends Mailable
 {
-    public function __construct(public Invoice $inv, public string $text, public string $link) {}
+    public function __construct(public Invoice $inv, public string $text, public string $link, public string $lang = 'ar') {}
 
     public function envelope(): Envelope
     {
         $c = $this->inv->company;
 
-        return new Envelope(subject: __(Invoice::KINDS[$this->inv->kind]).' '.$this->inv->number.' — '.($c->name_ar ?? config('app.name')));
+        return new Envelope(subject: \App\Support\InvoiceText::title($this->inv, $this->lang).' '.$this->inv->number.' — '.(\App\Support\InvoiceText::name($c, $this->lang) ?: config('app.name')));
     }
 
     public function content(): Content
@@ -26,8 +26,8 @@ class InvoiceMail extends Mailable
 
     public function attachments(): array
     {
-        $pdf = \App\Services\Documents\InvoiceExport::invoicePdf($this->inv);
+        $pdf = \App\Services\Documents\InvoiceExport::invoicePdf($this->inv, $this->lang);
 
-        return [Attachment::fromData(fn () => $pdf, \App\Services\Documents\InvoiceExport::fileName($this->inv))->withMime('application/pdf')];
+        return [Attachment::fromData(fn () => $pdf, \App\Services\Documents\InvoiceExport::fileName($this->inv, 'pdf', $this->lang))->withMime('application/pdf')];
     }
 }

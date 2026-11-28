@@ -20,32 +20,33 @@ class InvoiceExport
         return $file && is_file($file) ? $file : null;
     }
 
-    protected static function mpdf(string $format): \Mpdf\Mpdf
+    protected static function mpdf(string $format, string $dir = 'rtl'): \Mpdf\Mpdf
     {
         @mkdir(storage_path('framework/cache/mpdf'), 0775, true);
         $mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => $format, 'tempDir' => storage_path('framework/cache/mpdf'),
             'margin_top' => 10, 'margin_bottom' => 12, 'margin_left' => 10, 'margin_right' => 10]);
         $mpdf->autoScriptToLang = true;
         $mpdf->autoLangToFont = true;
-        $mpdf->SetDirectionality('rtl');
+        $mpdf->SetDirectionality($dir);
         $mpdf->setFooter('{PAGENO} / {nbpg}');
 
         return $mpdf;
     }
 
-    public static function invoicePdf(Invoice $inv): string
+    public static function invoicePdf(Invoice $inv, string $lang = 'ar'): string
     {
+        $lang = \App\Support\InvoiceText::lang($lang);
         $inv->loadMissing(['company', 'branch', 'party', 'lines.taxCode', 'original']);
-        $mpdf = static::mpdf('A4');
+        $mpdf = static::mpdf('A4', $lang === 'en' ? 'ltr' : 'rtl');
         $mpdf->SetTitle($inv->display_number);
-        $mpdf->WriteHTML(view('pdf.invoice', ['inv' => $inv, 'logo' => static::logoFile($inv->company)])->render());
+        $mpdf->WriteHTML(view('pdf.invoice', ['inv' => $inv, 'lang' => $lang, 'logo' => static::logoFile($inv->company)])->render());
 
         return $mpdf->Output('', 'S');
     }
 
-    public static function fileName(Invoice $inv, string $ext = 'pdf'): string
+    public static function fileName(Invoice $inv, string $ext = 'pdf', string $lang = 'ar'): string
     {
-        return str_replace(['/', '\\', ' '], '-', $inv->display_number).'.'.$ext;
+        return str_replace(['/', '\\', ' '], '-', $inv->display_number).($lang === 'en' ? '-en' : '').'.'.$ext;
     }
 
     /** @return array{0: array<int,string>, 1: array<int,array<int,mixed>>} money as int fils, totals row last */

@@ -452,6 +452,20 @@ abstract class InvoiceResource extends Resource
     }
 
     /** Send the posted sales document to the customer: email (saved address) or WhatsApp (saved phone). */
+    /** Print or download the invoice in one language: Arabic or English, never mixed. */
+    public static function printActions(): \Filament\Actions\ActionGroup
+    {
+        $actions = [];
+        foreach (\App\Support\InvoiceText::LANGS as $lang => $name) {
+            $actions[] = Action::make('print_'.$lang)->label(__('Print').' — '.$name)->icon('heroicon-o-printer')
+                ->url(fn (Invoice $record) => route('invoice.print', [$record, 'lang' => $lang]))->openUrlInNewTab();
+            $actions[] = Action::make('pdf_'.$lang)->label(__('Download PDF').' — '.$name)->icon('heroicon-o-document-arrow-down')
+                ->url(fn (Invoice $record) => route('invoice.pdf', [$record, 'lang' => $lang]));
+        }
+
+        return \Filament\Actions\ActionGroup::make($actions)->label(__('Print'))->icon('heroicon-o-printer')->button()->color('gray');
+    }
+
     public static function sendActions(): \Filament\Actions\ActionGroup
     {
         $sendable = fn (?Model $record) => $record instanceof Invoice && $record->isSendable();
@@ -459,17 +473,19 @@ abstract class InvoiceResource extends Resource
 
         return \Filament\Actions\ActionGroup::make([
             Action::make('sendEmail')->label(__('Send by email'))->icon('heroicon-o-envelope')->visible($sendable)
-                ->fillForm(fn (Invoice $record) => ['to' => $record->party?->email, 'message' => $sharing()->defaultMessage($record)])
+                ->fillForm(fn (Invoice $record) => ['lang' => 'ar', 'to' => $record->party?->email, 'message' => $sharing()->defaultMessage($record)])
                 ->form([
+                    Forms\Components\ToggleButtons::make('lang')->label(__('Invoice language'))->inline()->options(\App\Support\InvoiceText::LANGS)->default('ar')->required()->live()
+                        ->afterStateUpdated(fn ($state, Forms\Set $set, $livewire) => ($livewire->record ?? null) instanceof Invoice ? $set('message', $sharing()->defaultMessage($livewire->record, (string) $state)) : null),
                     Forms\Components\TextInput::make('to')->label(__('To'))->email()->required()
                         ->helperText(fn (Invoice $record) => $record->party?->email ? null : __('No email saved for this customer. It is saved on the customer card when you send.')),
                     Forms\Components\TextInput::make('cc')->label(__('Cc'))->placeholder('a@x.com, b@y.com'),
-                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(5)->required(),
+                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(5)->required()->extraInputAttributes(['dir' => 'auto']),
                 ])
                 ->modalSubmitActionLabel(__('Send'))
                 ->action(function (Invoice $record, array $data, $livewire) use ($sharing) {
                     try {
-                        $sharing()->email($record, $data['to'], $data['cc'] ?? null, $data['message']);
+                        $sharing()->email($record, $data['to'], $data['cc'] ?? null, $data['message'], $data['lang'] ?? 'ar');
                         if ($record->party && blank($record->party->email)) {
                             $record->party->update(['email' => $data['to']]);
                         }
@@ -481,10 +497,12 @@ abstract class InvoiceResource extends Resource
                     }
                 }),
             Action::make('sendWhatsapp')->label(__('Send by WhatsApp'))->icon('heroicon-o-chat-bubble-left-right')->visible($sendable)
-                ->fillForm(fn (Invoice $record) => ['phone' => $record->party?->phone, 'message' => $sharing()->defaultMessage($record)])
+                ->fillForm(fn (Invoice $record) => ['lang' => 'ar', 'phone' => $record->party?->phone, 'message' => $sharing()->defaultMessage($record)])
                 ->form([
+                    Forms\Components\ToggleButtons::make('lang')->label(__('Invoice language'))->inline()->options(\App\Support\InvoiceText::LANGS)->default('ar')->required()->live()
+                        ->afterStateUpdated(fn ($state, Forms\Set $set, $livewire) => ($livewire->record ?? null) instanceof Invoice ? $set('message', $sharing()->defaultMessage($livewire->record, (string) $state)) : null),
                     Forms\Components\TextInput::make('phone')->label(__('WhatsApp number'))->tel()->required()->helperText(__('Example: 0501234567 or +971501234567')),
-                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(5)->required(),
+                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(5)->required()->extraInputAttributes(['dir' => 'auto']),
                 ])
                 ->modalDescription(__('WhatsApp opens in a new tab with the message and the invoice link ready. Press send there.'))
                 ->modalSubmitActionLabel(__('Open WhatsApp'))
@@ -492,7 +510,7 @@ abstract class InvoiceResource extends Resource
                     if ($record->party && blank($record->party->phone)) {
                         $record->party->update(['phone' => $data['phone']]);
                     }
-                    $url = $sharing()->whatsappUrl($record, $data['phone'], $data['message']);
+                    $url = $sharing()->whatsappUrl($record, $data['phone'], $data['message'], $data['lang'] ?? 'ar');
                     $livewire->refreshRecord();
                     $livewire->js('window.open('.json_encode($url).', "_blank")');
                 }),

@@ -164,8 +164,17 @@ class ScreensTest extends AccountingTestCase
         $this->assertStringStartsWith('PK', $xlsx);
         $pdf = \App\Services\Documents\InvoiceExport::invoicePdf($inv);
         $this->assertStringStartsWith('%PDF', $pdf);
-        \Livewire\Livewire::test(Resources\SalesInvoiceResource\Pages\ViewInvoice::class, ['record' => $inv->getRouteKey()])
-            ->callAction('downloadPdf')->assertFileDownloaded(\App\Services\Documents\InvoiceExport::fileName($inv));
+        $this->get(route('invoice.pdf', [$inv, 'lang' => 'en']))->assertOk()->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('Content-Disposition', 'attachment; filename="'.\App\Services\Documents\InvoiceExport::fileName($inv, 'pdf', 'en').'"');
+        $this->get(route('invoice.pdf', $inv))->assertOk();
+        $en = $this->get(route('invoice.print', [$inv, 'lang' => 'en']))->assertOk()->assertSee('dir="ltr"', false)->assertSee('Tax Invoice')->assertSee('Bill to');
+        $this->assertStringNotContainsString('العميل', $en->getContent(), 'English print has no Arabic labels');
+        $ar = $this->get(route('invoice.print', $inv))->assertOk()->assertSee('dir="rtl"', false)->assertSee('فاتورة ضريبية');
+        $this->assertStringNotContainsString('Bill to', $ar->getContent(), 'Arabic print has no English labels');
+        $sharing = app(\App\Services\Accounting\InvoiceSharing::class);
+        $this->assertStringContainsString('lang=en', $sharing->link($inv, 'en'));
+        $this->assertStringStartsWith('Dear ', $sharing->defaultMessage($inv, 'en'));
+        $this->get($sharing->link($inv, 'en'))->assertOk()->assertSee('Tax Invoice');
         \Livewire\Livewire::test(Resources\PurchaseInvoiceResource\Pages\ListInvoices::class)->callAction('exportPdf')->assertFileDownloaded();
     }
 

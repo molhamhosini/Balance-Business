@@ -22,7 +22,7 @@ Route::get('/vouchers/{voucher}/print', function (\App\Models\Voucher $voucher) 
 Route::get('/i/{invoice}', function (\App\Models\Invoice $invoice) {
     abort_unless($invoice->isSendable(), 404);
 
-    return view('print.invoice', ['inv' => $invoice->load(['company', 'branch', 'party', 'lines.taxCode', 'original'])]);
+    return view('print.invoice', ['inv' => $invoice->load(['company', 'branch', 'party', 'lines.taxCode', 'original']), 'lang' => request('lang')]);
 })->middleware(['web', 'signed'])->name('invoice.shared');
 
 // Report PDF shared by WhatsApp: signed, expiring link to a generated file.
@@ -36,8 +36,16 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/invoices/{invoice}/print', function (\App\Models\Invoice $invoice) {
         abort_unless(auth()->user()->canAccessTenant($invoice->company) && auth()->user()->can(\App\Support\Perm::INVOICES_VIEW), 403);
 
-        return view('print.invoice', ['inv' => $invoice->load(['company', 'branch', 'party', 'lines.taxCode', 'original'])]);
+        return view('print.invoice', ['inv' => $invoice->load(['company', 'branch', 'party', 'lines.taxCode', 'original']), 'lang' => request('lang')]);
     })->name('invoice.print');
+
+    Route::get('/invoices/{invoice}/pdf', function (\App\Models\Invoice $invoice) {
+        abort_unless(auth()->user()->canAccessTenant($invoice->company) && auth()->user()->can(\App\Support\Perm::INVOICES_VIEW), 403);
+        $lang = \App\Support\InvoiceText::lang(request('lang'));
+
+        return response(\App\Services\Documents\InvoiceExport::invoicePdf($invoice, $lang), 200, ['Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.\App\Services\Documents\InvoiceExport::fileName($invoice, 'pdf', $lang).'"']);
+    })->name('invoice.pdf');
 
     Route::get('/invoices/{invoice}/einvoice.{format}', function (\App\Models\Invoice $invoice, string $format) {
         abort_unless(auth()->user()->canAccessTenant($invoice->company) && auth()->user()->can(\App\Support\Perm::INVOICES_VIEW), 403);
