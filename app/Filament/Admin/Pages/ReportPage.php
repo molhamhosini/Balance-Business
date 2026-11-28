@@ -99,11 +99,36 @@ abstract class ReportPage extends Page implements HasForms
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('excel')->label(__('Export to Excel'))->icon('heroicon-o-table-cells')->color('gray')->action(fn () => $this->downloadExcel()),
-            Action::make('pdf')->label(__('Download PDF'))->icon('heroicon-o-document-arrow-down')->color('gray')->action(fn () => $this->downloadPdf()),
+            $this->exportActions(),
             Action::make('print')->label(__('Print'))->icon('heroicon-o-printer')->color('gray')->alpineClickHandler('window.print()'),
             $this->sendActions(),
         ];
+    }
+
+    /** Run an export in one language (ar or en): labels, titles and account / party names follow it. */
+    public function inLanguage(string $lang, callable $fn): mixed
+    {
+        $before = app()->getLocale();
+        app()->setLocale(\App\Support\InvoiceText::lang($lang));
+        try {
+            return $fn();
+        } finally {
+            app()->setLocale($before);
+        }
+    }
+
+    /** Excel and PDF, each in Arabic or English. */
+    protected function exportActions(): \Filament\Actions\ActionGroup
+    {
+        $actions = [];
+        foreach (\App\Support\InvoiceText::LANGS as $lang => $name) {
+            $actions[] = Action::make('pdf_'.$lang)->label(__('Download PDF').' — '.$name)->icon('heroicon-o-document-arrow-down')
+                ->action(fn () => $this->inLanguage($lang, fn () => $this->downloadPdf()));
+            $actions[] = Action::make('excel_'.$lang)->label(__('Export to Excel').' — '.$name)->icon('heroicon-o-table-cells')
+                ->action(fn () => $this->inLanguage($lang, fn () => $this->downloadExcel()));
+        }
+
+        return \Filament\Actions\ActionGroup::make($actions)->label(__('Export'))->icon('heroicon-o-arrow-down-tray')->button()->color('gray');
     }
 
     /** Period / date line under the title. */
@@ -186,31 +211,38 @@ abstract class ReportPage extends Page implements HasForms
     protected function sendActions(): \Filament\Actions\ActionGroup
     {
         $title = fn () => strip_tags((string) $this->getTitle());
-        $message = fn () => $title().' — '.$this->company()->name."\n".$this->exportSubtitle();
+        $message = fn (string $lang = 'ar') => $this->inLanguage($lang, fn () => $title().' — '.$this->company()->name."\n".$this->exportSubtitle());
+        $langField = fn () => Forms\Components\ToggleButtons::make('lang')->label(__('Report language'))->inline()->options(\App\Support\InvoiceText::LANGS)->default('ar')->required()->live()
+            ->afterStateUpdated(fn ($state, Forms\Set $set) => $set('message', $message((string) $state)));
 
         return \Filament\Actions\ActionGroup::make([
             Action::make('sendEmail')->label(__('Send by email'))->icon('heroicon-o-envelope')
-                ->fillForm(fn () => ['message' => $message(), 'excel' => false])
+                ->fillForm(fn () => ['lang' => 'ar', 'message' => $message(), 'excel' => false])
                 ->form([
+                    $langField(),
                     Forms\Components\TextInput::make('to')->label(__('To'))->email()->required(),
                     Forms\Components\TextInput::make('cc')->label(__('Cc'))->placeholder('a@x.com, b@y.com'),
-                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(4)->required(),
+                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(4)->required()->extraInputAttributes(['dir' => 'auto']),
                     Forms\Components\Toggle::make('excel')->label(__('Also attach the Excel file')),
                 ])
                 ->modalSubmitActionLabel(__('Send'))
                 ->action(function (array $data) use ($title) {
                     try {
-                        $files = [$this->exportFileName('pdf') => [$this->pdfBinary(), 'application/pdf']];
-                        if ($data['excel'] ?? false) {
-                            ob_start();
-                            $this->downloadExcel()->sendContent();
-                            $files[$this->exportFileName('xlsx')] = [ob_get_clean(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-                        }
+                        $files = $this->inLanguage($data['lang'] ?? 'ar', function () use ($data) {
+                            $files = [$this->exportFileName('pdf') => [$this->pdfBinary(), 'application/pdf']];
+                            if ($data['excel'] ?? false) {
+                                ob_start();
+                                $this->downloadExcel()->sendContent();
+                                $files[$this->exportFileName('xlsx')] = [ob_get_clean(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+                            }
+
+                            return $files;
+                        });
                         $mail = \Illuminate\Support\Facades\Mail::to($data['to']);
                         if (! empty($data['cc'])) {
                             $mail->cc(array_filter(array_map('trim', explode(',', $data['cc']))));
                         }
-                        $mail->send(new \App\Mail\ReportMail($title().' — '.$this->company()->name, $data['message'], $files));
+                        $mail->send(new \App\Mail\ReportMail($this->inLanguage($data['lang'] ?? 'ar', fn () => $title().' — '.$this->company()->name), $data['message'], $files));
                         \App\Models\AuditLog::record('emailed', null, null, ['report' => $title(), 'to' => $data['to']], null, $this->company()->id);
                         Notification::make()->success()->title(__('Report sent to :to', ['to' => $data['to']]))->send();
                     } catch (\Throwable $e) {
@@ -219,10 +251,11 @@ abstract class ReportPage extends Page implements HasForms
                     }
                 }),
             Action::make('sendWhatsapp')->label(__('Send by WhatsApp'))->icon('heroicon-o-chat-bubble-left-right')
-                ->fillForm(fn () => ['message' => $message()])
+                ->fillForm(fn () => ['lang' => 'ar', 'message' => $message()])
                 ->form([
+                    $langField(),
                     Forms\Components\TextInput::make('phone')->label(__('WhatsApp number'))->tel()->helperText(__('Leave empty to choose the contact in WhatsApp.')),
-                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(4)->required(),
+                    Forms\Components\Textarea::make('message')->label(__('Message'))->rows(4)->required()->extraInputAttributes(['dir' => 'auto']),
                 ])
                 ->modalDescription(__('WhatsApp opens with the message and a link to the PDF (valid :d days). Press send there.', ['d' => self::SHARE_DAYS]))
                 ->modalSubmitActionLabel(__('Open WhatsApp'))
@@ -234,8 +267,9 @@ abstract class ReportPage extends Page implements HasForms
                         }
                     }
                     $name = \Illuminate\Support\Str::uuid().'.pdf';
-                    \Illuminate\Support\Facades\Storage::disk('local')->put('shared-reports/'.$name, $this->pdfBinary());
-                    $link = \Illuminate\Support\Facades\URL::temporarySignedRoute('report.shared', now()->addDays(self::SHARE_DAYS), ['file' => $name, 'name' => $this->exportFileName('pdf')]);
+                    [$pdf, $fileName] = $this->inLanguage($data['lang'] ?? 'ar', fn () => [$this->pdfBinary(), $this->exportFileName('pdf')]);
+                    \Illuminate\Support\Facades\Storage::disk('local')->put('shared-reports/'.$name, $pdf);
+                    $link = \Illuminate\Support\Facades\URL::temporarySignedRoute('report.shared', now()->addDays(self::SHARE_DAYS), ['file' => $name, 'name' => $fileName]);
                     \App\Models\AuditLog::record('whatsapp', null, null, ['report' => $title(), 'phone' => $data['phone'] ?? null], null, $this->company()->id);
                     $url = 'https://wa.me/'.\App\Services\Accounting\InvoiceSharing::normalizePhone($data['phone'] ?? '').'?text='.rawurlencode($data['message']."\n".$link);
                     $this->js('window.open('.json_encode($url).', "_blank")');

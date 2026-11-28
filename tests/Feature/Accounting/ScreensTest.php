@@ -211,7 +211,37 @@ class ScreensTest extends AccountingTestCase
             $res->sendContent();
             $pdf = ob_get_clean();
             $this->assertStringStartsWith('%PDF', $pdf, $page.' pdf');
+            $en = $lw->instance()->inLanguage('en', fn () => $lw->instance()->pdfBinary());
+            $this->assertStringStartsWith('%PDF', $en, $page.' english pdf');
         }
+    }
+
+    public function test_report_exports_in_english_have_no_arabic(): void
+    {
+        $this->postedOpening();
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+        $this->company->update(['name_en' => 'Meat Co']);
+        \App\Models\Account::where('company_id', $this->company->id)->update(['name_en' => \DB::raw("concat('Account ', code)")]);
+        $lw = \Livewire\Livewire::test(Pages\TrialBalance::class)->set('from', '2026-01-01')->set('to', '2026-12-31')->set('level', 4);
+        $xlsx = function (string $lang) use ($lw) {
+            ob_start();
+            $lw->instance()->inLanguage($lang, fn () => $lw->instance()->downloadExcel())->sendContent();
+            $file = tempnam(sys_get_temp_dir(), 'x');
+            file_put_contents($file, ob_get_clean());
+            $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet();
+
+            return [$sheet, json_encode($sheet->toArray(), JSON_UNESCAPED_UNICODE)];
+        };
+        [$sheet, $text] = $xlsx('en');
+        $this->assertFalse($sheet->getRightToLeft());
+        $this->assertStringContainsString('Meat Co', $text);
+        $this->assertStringContainsString('Account ', $text);
+        $this->assertDoesNotMatchRegularExpression('/\p{Arabic}/u', $text, 'English export has no Arabic text');
+        [$sheet, $text] = $xlsx('ar');
+        $this->assertTrue($sheet->getRightToLeft());
+        $this->assertMatchesRegularExpression('/\p{Arabic}/u', $text);
+        $this->assertSame('ar', app()->getLocale(), 'locale restored after an export');
     }
 
     public function test_report_can_be_sent_by_email_and_whatsapp(): void
