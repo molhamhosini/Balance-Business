@@ -37,6 +37,8 @@ class DataImporter
         'assets' => 'الأصول الثابتة',
         'open_invoices' => 'الفواتير المفتوحة الافتتاحية',
         'opening_stock' => 'المخزون الافتتاحي',
+        'sales_invoices' => 'فواتير البيع',
+        'purchase_invoices' => 'فواتير الشراء',
     ];
 
     /** key => [Arabic label, required, example] */
@@ -66,10 +68,23 @@ class DataImporter
             'due_date' => ['تاريخ الاستحقاق', false, '2026-01-19'], 'amount' => ['المبلغ المتبقي (شامل الضريبة)', true, '12500'],
             'branch' => ['رمز الفرع', false, ''],
         ],
+        'sales_invoices' => self::INVOICE_COLUMNS,
+        'purchase_invoices' => self::INVOICE_COLUMNS,
         'opening_stock' => [
             'item' => ['رمز الصنف', true, 'P00010'], 'warehouse' => ['رمز المستودع', false, ''], 'quantity' => ['الكمية (بالوحدة الأساسية)', true, '250'],
             'unit_cost' => ['تكلفة الوحدة', true, '31.50'],
         ],
+    ];
+
+    /** One row per invoice line; rows with the same invoice number become one invoice. */
+    private const INVOICE_COLUMNS = [
+        'number' => ['رقم الفاتورة (يجمع البنود)', true, 'S-1001'], 'date' => ['تاريخ الفاتورة', true, '2026-11-20'],
+        'party' => ['رمز أو اسم العميل/المورد', true, '1131-0001'], 'payment' => ['الدفع (credit = آجل / cash = نقداً)', false, 'cash'],
+        'cash_account' => ['رمز حساب الصندوق أو البنك (للنقدي)', false, '1111'], 'branch' => ['رمز الفرع', false, ''],
+        'warehouse' => ['رمز المخزن', false, ''], 'due_date' => ['تاريخ الاستحقاق (للآجل)', false, ''],
+        'item' => ['رمز الصنف', false, 'P00001'], 'account' => ['رمز الحساب (إذا لا يوجد صنف)', false, ''],
+        'description' => ['وصف البند', false, 'لحم غنم محلي'], 'quantity' => ['الكمية', true, '10'], 'unit' => ['الوحدة', false, ''],
+        'unit_price' => ['سعر الوحدة (قبل الضريبة)', true, '45'], 'tax' => ['رمز الضريبة (SR / ZR / EX / OS)', false, 'SR'],
     ];
 
     public function __construct(private PostingService $posting, private PartyService $parties, private AssetService $assets, private InventoryService $inventory, private InvoiceService $invoices) {}
@@ -93,6 +108,9 @@ class DataImporter
             $col++;
         }
         $sheet->setCellValue([1, 4], 'السطر الرمادي مثال: احذفه أو استبدله ببياناتك. الأعمدة المعلّمة بـ * إلزامية. التواريخ بصيغة YYYY-MM-DD.');
+        if (in_array($type, ['sales_invoices', 'purchase_invoices'], true)) {
+            $sheet->setCellValue([1, 5], 'السطر الرمادي مثال: كل سطر بند واحد، والأسطر التي لها نفس رقم الفاتورة تصبح فاتورة واحدة. للنقدي اكتب cash ورمز الصندوق أو البنك. الصنف يأخذ حسابه تلقائياً، وإلا اكتب رمز الحساب.');
+        }
 
         return $book;
     }
@@ -149,6 +167,12 @@ class DataImporter
         $res = ['created' => 0, 'updated' => 0, 'errors' => [], 'drafts' => []];
         if ($type === 'opening_stock') {
             return $this->openingStock($company, $rows, $user, $options, $res);
+        }
+        if (in_array($type, ['sales_invoices', 'purchase_invoices'], true)) {
+            $res = $this->invoices($company, $type === 'sales_invoices' ? 'sale' : 'purchase', $rows, $user, $options, $res);
+            AuditLog::record('imported', $company, null, ['type' => $type, 'created' => $res['created'], 'errors' => count($res['errors'])]);
+
+            return $res;
         }
         foreach ($rows as $n => $r) {
             try {
@@ -348,6 +372,92 @@ class DataImporter
         $this->invoices->post($inv, $user);
 
         return 'created';
+    }
+
+    /**
+     * Sales or purchase invoices: rows grouped by invoice number. Cash invoices name the cash box / bank account;
+     * stock lines go to the given warehouse (or the branch's first). Confirmed unless $options['post'] is false.
+     * A failing row rejects its whole invoice; other invoices still import.
+     */
+    private function invoices(Company $company, string $kind, array $rows, User $user, array $options, array $res): array
+    {
+        $groups = [];
+        foreach ($rows as $n => $r) {
+            $groups[(string) ($r['number'] ?? '')][$n] = $r;
+        }
+        $post = $options['post'] ?? true;
+        foreach ($groups as $number => $lines) {
+            $first = array_key_first($lines);
+            try {
+                DB::transaction(function () use ($company, $kind, $number, $lines, $user, $post, &$res) {
+                    $h = reset($lines);
+                    if ($number === '') {
+                        throw new AccountingException(__('Missing value: :k', ['k' => 'number']));
+                    }
+                    $this->need($h, 'date', 'party');
+                    $partyType = $kind === 'sale' ? 'customer' : 'supplier';
+                    $party = Party::where('company_id', $company->id)->where('type', $partyType)
+                        ->where(fn ($q) => $q->where('code', $h['party'])->orWhere('name_ar', $h['party'])->orWhere('name_en', $h['party']))->first()
+                        ?? throw new AccountingException(__('Customer / supplier :p not found. Import the parties first.', ['p' => $h['party']]));
+                    $payment = strtolower((string) ($h['payment'] ?? '')) ?: 'credit';
+                    $payment = match ($payment) { 'cash', 'نقدي', 'نقدا', 'نقداً' => 'cash', 'credit', 'آجل', 'اجل' => 'credit', default => throw new AccountingException(__('Payment must be cash or credit.')) };
+                    $cash = null;
+                    if ($payment === 'cash') {
+                        $this->need($h, 'cash_account');
+                        $cash = Account::where('company_id', $company->id)->where('code', (string) $h['cash_account'])->first();
+                        if (! $cash || ! ($cash->is_cash || $cash->is_bank)) {
+                            throw new AccountingException(__('Account :c is not a cash box or bank account.', ['c' => $h['cash_account']]));
+                        }
+                    }
+                    $ref = __('Imported invoice').' '.$number;
+                    $dup = Invoice::where('company_id', $company->id)->where('kind', $kind)->where('party_id', $party->id)
+                        ->where(fn ($q) => $kind === 'purchase' ? $q->where('supplier_invoice_number', $number) : $q->where('description', $ref))->first();
+                    if ($dup) {
+                        throw new AccountingException(__('Invoice :n is already imported (:d).', ['n' => $number, 'd' => $dup->display_number]));
+                    }
+                    $branchId = $this->branchId($company, ($h['branch'] ?? null) ?: null);
+                    $whId = null;
+                    if (! empty($h['warehouse'])) {
+                        $whId = Warehouse::where('company_id', $company->id)->where('code', (string) $h['warehouse'])->value('id')
+                            ?? throw new AccountingException(__('Warehouse :c not found.', ['c' => $h['warehouse']]));
+                    }
+                    $invLines = [];
+                    foreach ($lines as $l) {
+                        $this->need($l, 'quantity', 'unit_price');
+                        $item = null;
+                        if (! empty($l['item'])) {
+                            $item = Item::where('company_id', $company->id)->where('code', (string) $l['item'])->first()
+                                ?? throw new AccountingException(__('Item :c not found. Import the items first.', ['c' => $l['item']]));
+                        } elseif (empty($l['account'])) {
+                            throw new AccountingException(__('Each line needs an item code or an account code.'));
+                        }
+                        $invLines[] = [
+                            'item_id' => $item?->id, 'account_id' => $this->account($company, ($l['account'] ?? null) ?: null),
+                            'warehouse_id' => $item?->isStock() ? $whId : null, 'description' => ($l['description'] ?? null) ?: ($item?->name_ar ?? '-'),
+                            'quantity' => $this->num($l['quantity']), 'unit' => ($l['unit'] ?? null) ?: null, 'unit_price' => $this->num($l['unit_price']),
+                            'tax_code_id' => $this->taxId($company, ($l['tax'] ?? null) ?: 'SR'),
+                        ];
+                    }
+                    $inv = $this->invoices->saveDraft(new Invoice([
+                        'company_id' => $company->id, 'branch_id' => $branchId, 'kind' => $kind, 'payment' => $payment, 'cash_account_id' => $cash?->id,
+                        'party_id' => $party->id, 'date' => $this->date($h['date']),
+                        'due_date' => $payment === 'credit' && ! empty($h['due_date']) ? $this->date($h['due_date']) : null,
+                        'description' => $ref, 'supplier_invoice_number' => $kind === 'purchase' ? $number : null,
+                    ]), $invLines, $user);
+                    if ($post) {
+                        $this->invoices->post($inv, $user);
+                    }
+                    $res['created']++;
+                    $res['drafts'][] = $inv->id;
+                });
+            } catch (AccountingException|\InvalidArgumentException $e) {
+                $res['errors'][$first] = __('Invoice :n', ['n' => $number]).': '.$e->getMessage();
+            } catch (\Illuminate\Database\QueryException $e) {
+                $res['errors'][$first] = __('Invoice :n', ['n' => $number]).': '.__('Database error: :m', ['m' => str($e->getMessage())->before(' (Connection')->limit(140)]);
+            }
+        }
+
+        return $res;
     }
 
     private function openingStock(Company $company, array $rows, User $user, array $options, array $res): array
