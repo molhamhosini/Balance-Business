@@ -26,9 +26,9 @@ class ListVouchers extends ListRecords
     {
         return [
             'all' => Tab::make(__('All')),
-            'receipt' => Tab::make(__('Receipts'))->modifyQueryUsing(fn (Builder $q) => $q->where('type', 'receipt')),
-            'payment' => Tab::make(__('Payments'))->modifyQueryUsing(fn (Builder $q) => $q->where('type', 'payment')),
-            'draft' => Tab::make(__('To post'))->modifyQueryUsing(fn (Builder $q) => $q->where('status', 'draft'))
+            'receipt' => Tab::make(__('Receipts'))->modifyQueryUsing(fn (Builder $query) => $query->where('type', 'receipt')),
+            'payment' => Tab::make(__('Payments'))->modifyQueryUsing(fn (Builder $query) => $query->where('type', 'payment')),
+            'draft' => Tab::make(__('To post'))->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'draft'))
                 ->badge(fn () => VoucherResource::getEloquentQuery()->where('status', 'draft')->count() ?: null)->badgeColor('warning'),
         ];
     }

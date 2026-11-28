@@ -31,16 +31,16 @@ abstract class ListInvoices extends ListRecords
         $open = fn (Builder $q) => $q->where('status', 'posted')->where('payment', 'credit')
             ->whereRaw('total > (select coalesce(sum(a.amount),0) from allocations a where a.invoice_id = invoices.id)');
 
-        $quotations = $side === 'sale' ? ['quotations' => Tab::make(__('Quotations'))->modifyQueryUsing(fn (Builder $q) => $q->where('kind', 'quotation'))
+        $quotations = $side === 'sale' ? ['quotations' => Tab::make(__('Quotations'))->modifyQueryUsing(fn (Builder $query) => $query->where('kind', 'quotation'))
             ->badge(fn () => $r::getEloquentQuery()->where('kind', 'quotation')->whereIn('status', ['draft', 'sent'])->count() ?: null)] : [];
 
         return [
             'all' => Tab::make(__('All')),
-            'invoices' => Tab::make($side === 'sale' ? __('Invoices') : __('Bills'))->modifyQueryUsing(fn (Builder $q) => $q->where('kind', $side)),
-            'returns' => Tab::make($side === 'sale' ? __('Credit notes') : __('Debit notes'))->modifyQueryUsing(fn (Builder $q) => $q->where('kind', $side.'_return')),
+            'invoices' => Tab::make($side === 'sale' ? __('Invoices') : __('Bills'))->modifyQueryUsing(fn (Builder $query) => $query->where('kind', $side)),
+            'returns' => Tab::make($side === 'sale' ? __('Credit notes') : __('Debit notes'))->modifyQueryUsing(fn (Builder $query) => $query->where('kind', $side.'_return')),
             ...$quotations,
-            'open' => Tab::make(__('To pay'))->modifyQueryUsing(fn (Builder $q) => $open($q->where('kind', $side))),
-            'draft' => Tab::make(__('Drafts'))->modifyQueryUsing(fn (Builder $q) => $q->where('status', 'draft'))
+            'open' => Tab::make(__('To pay'))->modifyQueryUsing(fn (Builder $query) => $open($query->where('kind', $side))),
+            'draft' => Tab::make(__('Drafts'))->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'draft'))
                 ->badge(fn () => $r::getEloquentQuery()->where('status', 'draft')->count() ?: null)->badgeColor('warning'),
         ];
     }
