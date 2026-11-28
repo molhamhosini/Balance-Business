@@ -820,5 +820,19 @@
     ":n cheques due for collection": ":n شيك مستحق التحصيل",
     "Issued cheques due": "شيكات مستحقة الدفع",
     ":n cheques due for payment": ":n شيك مستحق الدفع",
-    "Export": "تصدير"
+    "Export": "تصدير",
+    "Purchase order": "طلب شراء",
+    "Purchase orders": "طلبات الشراء",
+    "New purchase order": "طلب شراء جديد",
+    "Convert to bill": "تحويل إلى فاتورة شراء",
+    "Bill created from the purchase order": "تم إنشاء فاتورة شراء من الطلب",
+    "Cancel purchase order": "إلغاء طلب الشراء",
+    "Purchase order cancelled": "تم إلغاء طلب الشراء",
+    "Order date": "تاريخ الطلب",
+    "Expected delivery": "التسليم المتوقع",
+    "Converted to bill": "محوّل إلى فاتورة شراء",
+    "Bill": "فاتورة شراء",
+    "Creates a draft purchase bill with the same lines. Review it, then confirm it.": "ينشئ فاتورة شراء مسودة بنفس البنود. راجعها ثم أكّدها.",
+    "Purchase order :n": "طلب شراء :n",
+    "View and print the purchase order": "عرض وطباعة طلب الشراء"
 }

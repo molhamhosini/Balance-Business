@@ -45,9 +45,12 @@ abstract class InvoiceResource extends Resource
 
     abstract public static function partyResource(): string;
 
-    public static function kinds(): array { return static::side() === 'sale' ? ['sale', 'sale_return', 'quotation'] : [static::side(), static::side().'_return']; }
+    public static function kinds(): array { return static::side() === 'sale' ? ['sale', 'sale_return', 'quotation'] : ['purchase', 'purchase_return', 'purchase_order']; }
 
-    public static function isEditable(Model $record): bool { return $record->status === 'draft' || ($record->kind === 'quotation' && $record->status === 'sent'); }
+    /** The offer document of this side: quotation (sales) or purchase order (purchases). */
+    public static function offerKind(): string { return static::side() === 'sale' ? 'quotation' : 'purchase_order'; }
+
+    public static function isEditable(Model $record): bool { return $record->status === 'draft' || ($record instanceof Invoice && $record->isQuotation() && $record->status === 'sent'); }
 
     public static function statusLabels(): array
     {
@@ -73,11 +76,11 @@ abstract class InvoiceResource extends Resource
             Forms\Components\Section::make()->columns(4)->schema([
                 Forms\Components\ToggleButtons::make('kind')->label(__('Document'))->inline()->required()->columnSpan(2)
                     ->options(fn (?Invoice $record) => collect(static::kinds())
-                        ->filter(fn ($k) => ! $record?->exists || ($record->kind === 'quotation') === ($k === 'quotation'))
+                        ->filter(fn ($k) => ! $record?->exists || $record->isQuotation() === in_array($k, Invoice::OFFER_KINDS, true))
                         ->mapWithKeys(fn ($k) => [$k => static::kindLabel($k)])->all())
-                    ->colors([static::side() => 'primary', static::side().'_return' => 'warning', 'quotation' => 'info'])
+                    ->colors([static::side() => 'primary', static::side().'_return' => 'warning', 'quotation' => 'info', 'purchase_order' => 'info'])
                     ->default(fn () => in_array(request('kind'), static::kinds(), true) ? request('kind') : static::side())->live()
-                    ->disabled(fn (?Invoice $record) => (bool) $record?->original_invoice_id || $record?->kind === 'quotation' || (bool) $record?->quotation_id)->dehydrated(),
+                    ->disabled(fn (?Invoice $record) => (bool) $record?->original_invoice_id || $record?->isQuotation() || (bool) $record?->quotation_id)->dehydrated(),
                 Forms\Components\ToggleButtons::make('payment')->label(__('Payment'))->inline()->required()
                     ->options(['credit' => __('On credit'), 'cash' => __('Cash')])->default('credit')->live(),
                 Forms\Components\Select::make('cash_account_id')->label(__('Cash / bank'))->options(fn () => Options::cashAndBank())->searchable()
@@ -111,13 +114,13 @@ abstract class InvoiceResource extends Resource
                         return $p ? __('Balance').': '.Money::format(abs($p->balance())).($p->trn ? ' · '.__('TRN').' '.$p->trn : '').(Money::toCents($p->credit_limit) > 0 ? ' · '.__('Credit limit').' '.Money::format($p->credit_limit) : '') : null;
                     }),
                 Forms\Components\Select::make('branch_id')->label(__('Branch'))->options(fn () => Options::branches())->default(fn () => array_key_first(Options::branches()))->required(),
-                Forms\Components\TextInput::make('supplier_invoice_number')->label(__('Supplier invoice no.'))->visible(! $sale)->maxLength(60)
+                Forms\Components\TextInput::make('supplier_invoice_number')->label(__('Supplier invoice no.'))->visible(fn (Get $get) => ! $sale && $get('kind') !== 'purchase_order')->maxLength(60)
                     ->placeholder(fn (Get $get) => $get('kind') === 'purchase' ? app(\App\Services\Accounting\SequenceService::class)->peekSupplierInvoice(Options::companyId(), (int) date('Y', strtotime($get('date') ?: 'now'))) : null)
                     ->helperText(fn (Get $get) => $get('kind') === 'purchase' ? __('Leave empty to number automatically.') : null),
-                Forms\Components\DatePicker::make('date')->label(fn (Get $get) => $get('kind') === 'quotation' ? __('Quotation date') : __('Invoice date'))->default(now())->required()->native(false)->displayFormat('Y-m-d'),
-                Forms\Components\DatePicker::make('due_date')->label(fn (Get $get) => $get('kind') === 'quotation' ? __('Valid until') : __('Due date'))->native(false)->displayFormat('Y-m-d')
-                    ->placeholder(fn (Get $get) => $get('kind') === 'quotation' ? __(':d days', ['d' => \App\Services\Accounting\InvoiceService::QUOTATION_VALID_DAYS]) : __('From payment terms'))
-                    ->visible(fn (Get $get) => $get('payment') === 'credit' || $get('kind') === 'quotation'),
+                Forms\Components\DatePicker::make('date')->label(fn (Get $get) => match ($get('kind')) { 'quotation' => __('Quotation date'), 'purchase_order' => __('Order date'), default => __('Invoice date') })->default(now())->required()->native(false)->displayFormat('Y-m-d'),
+                Forms\Components\DatePicker::make('due_date')->label(fn (Get $get) => match ($get('kind')) { 'quotation' => __('Valid until'), 'purchase_order' => __('Expected delivery'), default => __('Due date') })->native(false)->displayFormat('Y-m-d')
+                    ->placeholder(fn (Get $get) => in_array($get('kind'), Invoice::OFFER_KINDS, true) ? __(':d days', ['d' => \App\Services\Accounting\InvoiceService::QUOTATION_VALID_DAYS]) : __('From payment terms'))
+                    ->visible(fn (Get $get) => $get('payment') === 'credit' || in_array($get('kind'), Invoice::OFFER_KINDS, true)),
                 Forms\Components\Select::make('original_invoice_id')->label(__('Original invoice'))->searchable()
                     ->visible(fn (Get $get) => str_ends_with((string) $get('kind'), '_return'))
                     ->options(fn (Get $get) => Invoice::where('company_id', Options::companyId())->where('kind', static::side())->where('status', 'posted')
@@ -256,7 +259,7 @@ abstract class InvoiceResource extends Resource
                 Infolists\Components\ViewEntry::make('smart')->hiddenLabel()->view('filament.components.smart-buttons')->state(fn (Invoice $record) => static::smartButtons($record)),
                 Infolists\Components\ViewEntry::make('statusbar')->hiddenLabel()->view('filament.components.statusbar')->state(fn (Invoice $record) => $record->isQuotation() ? [
                     'current' => $record->status,
-                    'steps' => ['draft' => __('Draft'), 'sent' => __('Sent')] + ($record->status === 'cancelled' ? ['cancelled' => __('Cancelled')] : ['converted' => __('Converted to invoice')]),
+                    'steps' => ['draft' => __('Draft'), 'sent' => __('Sent')] + ($record->status === 'cancelled' ? ['cancelled' => __('Cancelled')] : ['converted' => $record->isPurchaseOrder() ? __('Converted to bill') : __('Converted to invoice')]),
                 ] : [
                     'current' => $record->status === 'posted' ? $record->paymentState() : $record->status,
                     'steps' => ['draft' => __('Draft'), 'posted' => __('Posted')] + ($record->status === 'cancelled' ? ['cancelled' => __('Cancelled')] : ($record->payment === 'credit' ? ['not_paid' => __('Not paid'), 'partial' => __('Partially paid'), 'paid' => __('Paid')] : ['paid' => __('Paid')])),
@@ -267,18 +270,18 @@ abstract class InvoiceResource extends Resource
                 ->columns(4)->schema([
                     Infolists\Components\TextEntry::make('party.label')->label(fn (Invoice $record) => $record->isSale() ? __('Customer') : __('Supplier'))->weight('bold')->columnSpan(2)
                         ->url(fn (Invoice $record) => static::partyResource()::getUrl('view', ['record' => $record->party_id])),
-                    Infolists\Components\TextEntry::make('date')->label(fn (Invoice $record) => $record->isQuotation() ? __('Quotation date') : __('Invoice date'))->date('Y-m-d'),
-                    Infolists\Components\TextEntry::make('due_date')->label(fn (Invoice $record) => $record->isQuotation() ? __('Valid until') : __('Due date'))->date('Y-m-d')->placeholder('—'),
+                    Infolists\Components\TextEntry::make('date')->label(fn (Invoice $record) => $record->isPurchaseOrder() ? __('Order date') : ($record->isQuotation() ? __('Quotation date') : __('Invoice date')))->date('Y-m-d'),
+                    Infolists\Components\TextEntry::make('due_date')->label(fn (Invoice $record) => $record->isPurchaseOrder() ? __('Expected delivery') : ($record->isQuotation() ? __('Valid until') : __('Due date')))->date('Y-m-d')->placeholder('—'),
                     Infolists\Components\TextEntry::make('party.trn')->label(__('TRN'))->placeholder('—'),
                     Infolists\Components\TextEntry::make('payment')->label(__('Payment'))->formatStateUsing(fn ($state) => $state === 'cash' ? __('Cash') : __('On credit')),
                     Infolists\Components\TextEntry::make('branch.name')->label(__('Branch')),
-                    Infolists\Components\TextEntry::make('supplier_invoice_number')->label(__('Supplier invoice no.'))->placeholder('—')->visible(fn (Invoice $record) => ! $record->isSale()),
+                    Infolists\Components\TextEntry::make('supplier_invoice_number')->label(__('Supplier invoice no.'))->placeholder('—')->visible(fn (Invoice $record) => ! $record->isSale() && ! $record->isPurchaseOrder()),
                     Infolists\Components\TextEntry::make('original.number')->label(__('Original invoice'))->placeholder('—')->visible(fn (Invoice $record) => $record->isReturn()),
                     Infolists\Components\TextEntry::make('currency')->label(__('Currency'))->visible(fn (Invoice $record) => $record->currency !== 'AED')
                         ->formatStateUsing(fn (Invoice $record) => $record->currency.' · '.__('Rate').' '.rtrim(rtrim((string) $record->fx_rate, '0'), '.').' · '.Money::format($record->baseTotalCents()).' AED'),
                     Infolists\Components\TextEntry::make('description')->label(__('Description'))->placeholder('—')->columnSpanFull(),
                 ]),
-            Infolists\Components\Section::make(__('Invoice lines'))->schema([
+            Infolists\Components\Section::make(fn (Invoice $record) => $record->isQuotation() ? __('Lines') : __('Invoice lines'))->schema([
                 Infolists\Components\ViewEntry::make('lines_table')->hiddenLabel()->view('filament.components.invoice-lines')->state(fn (Invoice $record) => $record),
             ]),
             Infolists\Components\Section::make(__('Journal items'))->collapsible()->collapsed()->visible(fn (Invoice $record) => $record->journalEntry !== null)->schema([
@@ -301,9 +304,9 @@ abstract class InvoiceResource extends Resource
             $payments ? ['icon' => 'heroicon-o-banknotes', 'label' => __('Settlements'), 'value' => $payments, 'url' => VoucherResource::getUrl('view', ['record' => $r->allocations()->whereNotNull('voucher_id')->value('voucher_id')])] : null,
             $notes ? ['icon' => 'heroicon-o-receipt-refund', 'label' => $r->isSale() ? __('Credit notes') : __('Debit notes'), 'value' => $notes, 'url' => static::getUrl('view', ['record' => $r->returns()->where('status', '!=', 'cancelled')->value('id')])] : null,
             $r->original ? ['icon' => 'heroicon-o-document-text', 'label' => __('Original invoice'), 'value' => $r->original->number, 'url' => static::getUrl('view', ['record' => $r->original])] : null,
-            $r->quotation ? ['icon' => 'heroicon-o-document-duplicate', 'label' => __('Quotation'), 'value' => $r->quotation->number, 'url' => static::getUrl('view', ['record' => $r->quotation])] : null,
-            ($conv = $r->isQuotation() ? $r->convertedInvoices()->latest('id')->first() : null) ? ['icon' => 'heroicon-o-document-currency-dollar', 'label' => __('Invoice'), 'value' => $conv->display_number, 'url' => static::getUrl('view', ['record' => $conv])] : null,
-            ['icon' => 'heroicon-o-printer', 'label' => $r->isQuotation() ? __('Quotation') : ($r->isSale() ? __('Tax invoice') : __('Print')), 'value' => '', 'url' => route('invoice.print', $r)],
+            $r->quotation ? ['icon' => 'heroicon-o-document-duplicate', 'label' => $r->quotation->isPurchaseOrder() ? __('Purchase order') : __('Quotation'), 'value' => $r->quotation->number, 'url' => static::getUrl('view', ['record' => $r->quotation])] : null,
+            ($conv = $r->isQuotation() ? $r->convertedInvoices()->latest('id')->first() : null) ? ['icon' => 'heroicon-o-document-currency-dollar', 'label' => $r->isPurchaseOrder() ? __('Bill') : __('Invoice'), 'value' => $conv->display_number, 'url' => static::getUrl('view', ['record' => $conv])] : null,
+            ['icon' => 'heroicon-o-printer', 'label' => match (true) { $r->isPurchaseOrder() => __('Purchase order'), $r->isQuotation() => __('Quotation'), $r->isSale() => __('Tax invoice'), default => __('Print') }, 'value' => '', 'url' => route('invoice.print', $r)],
         ]));
     }
 
@@ -315,8 +318,8 @@ abstract class InvoiceResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('display_number')->label(__('Number'))->searchable(['number', 'supplier_invoice_number'])->weight('bold')
                     ->description(fn (Invoice $record) => $record->supplier_invoice_number),
-                Tables\Columns\TextColumn::make('kind')->label(__('Type'))->badge()->formatStateUsing(fn ($state) => $state === 'quotation' ? __('Quotation') : (str_ends_with($state, '_return') ? ($state === 'sale_return' ? __('Credit note') : __('Debit note')) : __('Invoice')))
-                    ->color(fn ($state) => $state === 'quotation' ? 'gray' : (str_ends_with($state, '_return') ? 'warning' : 'info')),
+                Tables\Columns\TextColumn::make('kind')->label(__('Type'))->badge()->formatStateUsing(fn ($state) => match (true) { $state === 'quotation' => __('Quotation'), $state === 'purchase_order' => __('Purchase order'), $state === 'sale_return' => __('Credit note'), $state === 'purchase_return' => __('Debit note'), default => __('Invoice') })
+                    ->color(fn ($state) => in_array($state, Invoice::OFFER_KINDS, true) ? 'gray' : (str_ends_with($state, '_return') ? 'warning' : 'info')),
                 Tables\Columns\TextColumn::make('party.name_ar')->label($sale ? __('Customer') : __('Supplier'))->searchable(),
                 Tables\Columns\TextColumn::make('date')->label(__('Date'))->date('Y-m-d')->sortable(),
                 Tables\Columns\TextColumn::make('due_date')->label(__('Due date'))->date('Y-m-d')->sortable()->toggleable()
@@ -375,20 +378,20 @@ abstract class InvoiceResource extends Resource
         $open = fn (?Model $record) => $record instanceof Invoice && $record->isQuotation() && in_array($record->status, ['draft', 'sent'], true) && auth()->user()->can(Perm::INVOICES_DRAFT);
 
         return [
-            Action::make('convertQuotation')->label(__('Convert to invoice'))->icon('heroicon-o-document-check')->color('primary')->visible($open)
-                ->requiresConfirmation()->modalDescription(__('Creates a draft sales invoice with the same lines. Review it, then confirm it.'))
+            Action::make('convertQuotation')->label(fn (Invoice $record) => $record->isPurchaseOrder() ? __('Convert to bill') : __('Convert to invoice'))->icon('heroicon-o-document-check')->color('primary')->visible($open)
+                ->requiresConfirmation()->modalDescription(fn (Invoice $record) => $record->isPurchaseOrder() ? __('Creates a draft purchase bill with the same lines. Review it, then confirm it.') : __('Creates a draft sales invoice with the same lines. Review it, then confirm it.'))
                 ->action(function (Invoice $record, $livewire) {
                     $inv = null;
-                    if (static::attempt(function () use ($record, &$inv) { $inv = app(InvoiceService::class)->convertQuotation($record, auth()->user()); }, __('Invoice created from the quotation'))) {
+                    if (static::attempt(function () use ($record, &$inv) { $inv = app(InvoiceService::class)->convertQuotation($record, auth()->user()); }, $record->isPurchaseOrder() ? __('Bill created from the purchase order') : __('Invoice created from the quotation'))) {
                         $livewire->redirect(static::getUrl('edit', ['record' => $inv]), navigate: true);
                     }
                 }),
             Action::make('markSent')->label(__('Mark as sent'))->icon('heroicon-o-paper-airplane')->color('gray')
                 ->visible(fn (?Model $record) => $open($record) && $record->status === 'draft')
                 ->action(fn (Invoice $record, $livewire) => static::attempt(fn () => app(InvoiceService::class)->markQuotationSent($record, auth()->user()), __('Saved')) && $livewire->refreshRecord()),
-            Action::make('cancelQuotation')->label(__('Cancel quotation'))->icon('heroicon-o-x-circle')->color('danger')->visible($open)
+            Action::make('cancelQuotation')->label(fn (Invoice $record) => $record->isPurchaseOrder() ? __('Cancel purchase order') : __('Cancel quotation'))->icon('heroicon-o-x-circle')->color('danger')->visible($open)
                 ->form([Forms\Components\TextInput::make('reason')->label(__('Reason'))])
-                ->action(fn (Invoice $record, array $data, $livewire) => static::attempt(fn () => app(InvoiceService::class)->cancelQuotation($record, auth()->user(), $data['reason'] ?? null), __('Quotation cancelled')) && $livewire->refreshRecord()),
+                ->action(fn (Invoice $record, array $data, $livewire) => static::attempt(fn () => app(InvoiceService::class)->cancelQuotation($record, auth()->user(), $data['reason'] ?? null), $record->isPurchaseOrder() ? __('Purchase order cancelled') : __('Quotation cancelled')) && $livewire->refreshRecord()),
         ];
     }
 

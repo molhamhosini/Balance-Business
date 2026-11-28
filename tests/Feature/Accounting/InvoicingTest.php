@@ -105,6 +105,37 @@ class InvoicingTest extends AccountingTestCase
         $this->invoices()->convertQuotation($q->fresh(), $this->entry);
     }
 
+    public function test_purchase_order_never_posts_and_converts_to_a_draft_bill(): void
+    {
+        $s = $this->party('supplier');
+        $po = $this->invoice('purchase_order', $s, [$this->line('5111', '10', '20')]);
+        $this->assertSame('PO-2026-00001', $po->number);
+        $this->assertTrue($po->isQuotation());
+        $this->assertNull($po->supplier_invoice_number);
+        $this->assertNull($po->journal_entry_id);
+        $this->assertSame(0, $s->balance());
+        try {
+            $this->invoices()->post($po, $this->accountant);
+            $this->fail('A purchase order must not post.');
+        } catch (\App\Exceptions\AccountingException) {
+        }
+        $po = $this->invoices()->markQuotationSent($po, $this->entry);
+        $bill = $this->invoices()->convertQuotation($po, $this->entry);
+        $this->assertSame('purchase', $bill->kind);
+        $this->assertSame('draft', $bill->status);
+        $this->assertSame($po->id, $bill->quotation_id);
+        $this->assertSame('210.00', $bill->total);
+        $this->assertSame('converted', $po->fresh()->status);
+        $bill = $this->invoices()->post($bill, $this->accountant);
+        $this->assertSame('posted', $bill->status);
+        $this->assertStringStartsWith('BILL-', $bill->number);
+
+        $po2 = $this->invoice('purchase_order', $s, [$this->line('5111', '1', '5')]);
+        $this->assertSame('PO-2026-00002', $po2->number);
+        $this->invoices()->cancelQuotation($po2, $this->entry);
+        $this->assertSame('cancelled', $po2->fresh()->status);
+    }
+
     public function test_cash_sale_debits_the_cash_box(): void
     {
         $inv = $this->invoice('sale', $this->party('customer'), [$this->line('4113', '2', '50')], ['payment' => 'cash', 'cash_account_id' => $this->acc('1111')]);

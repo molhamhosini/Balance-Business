@@ -65,9 +65,9 @@ class InvoiceService
     public function saveDraft(Invoice $inv, array $lines, User $user): Invoice
     {
         $this->posting->authorize($user, Perm::INVOICES_DRAFT);
-        $editable = $inv->kind === 'quotation' ? ['draft', 'sent'] : ['draft'];
+        $editable = $inv->isQuotation() ? ['draft', 'sent'] : ['draft'];
         if ($inv->exists && ! in_array($inv->getOriginal('status'), $editable, true)) {
-            throw new AccountingException($inv->kind === 'quotation' ? __('A converted or cancelled quotation cannot be modified.') : __('A posted invoice cannot be modified. Issue a credit note instead.'));
+            throw new AccountingException($inv->isQuotation() ? __('A converted or cancelled quotation cannot be modified.') : __('A posted invoice cannot be modified. Issue a credit note instead.'));
         }
         $this->validateHeader($inv);
         if (! $lines) {
@@ -77,7 +77,7 @@ class InvoiceService
         return DB::transaction(function () use ($inv, $lines, $user) {
             $before = $inv->exists ? $inv->getOriginal() : null;
             $inv->created_by ??= $user->id;
-            $inv->status = $inv->kind === 'quotation' && $inv->exists ? $inv->getOriginal('status') : 'draft';
+            $inv->status = $inv->isQuotation() && $inv->exists ? $inv->getOriginal('status') : 'draft';
             $inv->currency = $inv->currency ?: 'AED';
             if ($inv->currency === 'AED') {
                 $inv->fx_rate = 1;
@@ -88,10 +88,10 @@ class InvoiceService
             $defaultWh = Warehouse::where('company_id', $inv->company_id)->where('branch_id', $inv->branch_id)->orderBy('id')->value('id')
                 ?? Warehouse::where('company_id', $inv->company_id)->orderBy('id')->value('id');
             if (! $inv->due_date) {
-                $inv->due_date = $inv->date->copy()->addDays($inv->kind === 'quotation' ? self::QUOTATION_VALID_DAYS : $inv->party->payment_terms_days);
+                $inv->due_date = $inv->date->copy()->addDays($inv->isQuotation() ? self::QUOTATION_VALID_DAYS : $inv->party->payment_terms_days);
             }
-            if ($inv->kind === 'quotation' && blank($inv->number)) {
-                $inv->number = $this->sequences->next($inv->company_id, Invoice::PREFIX['quotation'], (int) $inv->date->format('Y'));
+            if ($inv->isQuotation() && blank($inv->number)) {
+                $inv->number = $this->sequences->next($inv->company_id, Invoice::PREFIX[$inv->kind], (int) $inv->date->format('Y'));
             }
             if ($inv->kind === 'purchase' && blank($inv->supplier_invoice_number)) {
                 $inv->supplier_invoice_number = $this->sequences->nextSupplierInvoice($inv->company_id, (int) $inv->date->format('Y'));
@@ -191,7 +191,7 @@ class InvoiceService
 
         return DB::transaction(function () use ($inv, $user) {
             $inv = Invoice::whereKey($inv->id)->lockForUpdate()->firstOrFail();
-            if ($inv->kind === 'quotation') {
+            if ($inv->isQuotation()) {
                 throw new AccountingException(__('A quotation is not posted. Convert it to an invoice instead.'));
             }
             if ($inv->status !== 'draft') {
@@ -413,7 +413,7 @@ class InvoiceService
     public function markQuotationSent(Invoice $q, User $user): Invoice
     {
         $this->posting->authorize($user, Perm::INVOICES_DRAFT);
-        if ($q->kind !== 'quotation' || $q->status !== 'draft') {
+        if (! $q->isQuotation() || $q->status !== 'draft') {
             return $q;
         }
         $q->status = 'sent';
@@ -427,16 +427,16 @@ class InvoiceService
     public function convertQuotation(Invoice $q, User $user): Invoice
     {
         $this->posting->authorize($user, Perm::INVOICES_DRAFT);
-        if ($q->kind !== 'quotation' || ! in_array($q->status, ['draft', 'sent'], true)) {
+        if (! $q->isQuotation() || ! in_array($q->status, ['draft', 'sent'], true)) {
             throw new AccountingException(__('Only an open quotation can be converted to an invoice.'));
         }
 
         return DB::transaction(function () use ($q, $user) {
             $inv = $this->saveDraft(new Invoice([
-                'company_id' => $q->company_id, 'branch_id' => $q->branch_id, 'kind' => 'sale', 'payment' => $q->payment,
+                'company_id' => $q->company_id, 'branch_id' => $q->branch_id, 'kind' => $q->convertsTo(), 'payment' => $q->payment,
                 'cash_account_id' => $q->payment === 'cash' ? $q->cash_account_id : null, 'currency' => $q->currency, 'fx_rate' => $q->fx_rate,
                 'party_id' => $q->party_id, 'date' => now()->toDateString(), 'quotation_id' => $q->id,
-                'description' => trim(__('Quotation :n', ['n' => $q->number]).' '.($q->description ?? '')),
+                'description' => trim(($q->isPurchaseOrder() ? __('Purchase order :n', ['n' => $q->number]) : __('Quotation :n', ['n' => $q->number])).' '.($q->description ?? '')),
             ]), $q->lines->map(fn ($l) => [
                 'account_id' => $l->account_id, 'description' => $l->description, 'quantity' => $l->quantity,
                 'unit' => $l->unit, 'unit_price' => $l->unit_price, 'tax_code_id' => $l->tax_code_id,
@@ -454,7 +454,7 @@ class InvoiceService
     public function cancelQuotation(Invoice $q, User $user, ?string $reason = null): Invoice
     {
         $this->posting->authorize($user, Perm::INVOICES_DRAFT);
-        if ($q->kind !== 'quotation' || ! in_array($q->status, ['draft', 'sent'], true)) {
+        if (! $q->isQuotation() || ! in_array($q->status, ['draft', 'sent'], true)) {
             throw new AccountingException(__('Only an open quotation can be cancelled.'));
         }
         $before = $q->status;

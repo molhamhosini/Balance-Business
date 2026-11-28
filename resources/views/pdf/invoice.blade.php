@@ -1,8 +1,8 @@
 @php($m = fn ($v) => \App\Support\Money::format($v))
 @php($c = $inv->company)
 @php($p = $inv->party)
-@php($title = match ($inv->kind) { 'sale' => ($p?->trn ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة'), 'sale_return' => 'إشعار دائن ضريبي', 'quotation' => 'عرض سعر', 'purchase' => 'فاتورة شراء', default => 'إشعار مدين' })
-@php($titleEn = match ($inv->kind) { 'sale' => ($p?->trn ? 'Tax Invoice' : 'Simplified Tax Invoice'), 'sale_return' => 'Tax Credit Note', 'quotation' => 'Quotation', 'purchase' => 'Purchase Bill', default => 'Debit Note' })
+@php($title = match ($inv->kind) { 'sale' => ($p?->trn ? 'فاتورة ضريبية' : 'فاتورة ضريبية مبسطة'), 'sale_return' => 'إشعار دائن ضريبي', 'quotation' => 'عرض سعر', 'purchase_order' => 'طلب شراء', 'purchase' => 'فاتورة شراء', default => 'إشعار مدين' })
+@php($titleEn = match ($inv->kind) { 'sale' => ($p?->trn ? 'Tax Invoice' : 'Simplified Tax Invoice'), 'sale_return' => 'Tax Credit Note', 'quotation' => 'Quotation', 'purchase_order' => 'Purchase Order', 'purchase' => 'Purchase Bill', default => 'Debit Note' })
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head><meta charset="utf-8">
@@ -39,9 +39,10 @@ h1{margin:0;font-size:14pt}
     @if($inv->status === 'cancelled')<div class="stamp">{{ __('Cancelled') }}</div>@elseif($inv->status === 'draft')<div class="stamp">{{ __('Draft') }} — {{ __('not a tax invoice') }}</div>@endif
   </td>
   <td style="width:34%;text-align:left">
-    <div><b>رقم الفاتورة / No.:</b> {{ $inv->display_number }}</div>
+    <div><b>{{ $inv->isPurchaseOrder() ? 'رقم الطلب / PO No.:' : 'رقم الفاتورة / No.:' }}</b> {{ $inv->display_number }}</div>
     <div><b>التاريخ / Date:</b> {{ $inv->date->format('Y-m-d') }}</div>
     @if($inv->kind === 'quotation' && $inv->due_date)<div><b>صالح حتى / Valid until:</b> {{ $inv->due_date->format('Y-m-d') }}</div>
+    @elseif($inv->kind === 'purchase_order' && $inv->due_date)<div><b>تاريخ التسليم المتوقع / Expected delivery:</b> {{ $inv->due_date->format('Y-m-d') }}</div>
     @elseif($inv->due_date && $inv->payment === 'credit')<div><b>الاستحقاق / Due:</b> {{ $inv->due_date->format('Y-m-d') }}</div>@endif
     @if($inv->original)<div><b>الفاتورة الأصلية / Original:</b> {{ $inv->original->number }} ({{ $inv->original->date->format('Y-m-d') }})</div>@endif
     @if($inv->supplier_invoice_number)<div><b>رقم فاتورة المورد:</b> {{ $inv->supplier_invoice_number }}</div>@endif
