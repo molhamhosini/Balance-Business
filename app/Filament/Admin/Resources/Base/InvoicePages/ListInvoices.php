@@ -21,7 +21,32 @@ abstract class ListInvoices extends ListRecords
                 ->url(fn () => $r::getUrl('create', ['kind' => $side]))->visible(fn () => $r::canCreate()),
             Actions\Action::make('newReturn')->label($side === 'sale' ? __('New credit note') : __('New debit note'))->icon('heroicon-o-receipt-refund')->color('warning')
                 ->url(fn () => $r::getUrl('create', ['kind' => $side.'_return']))->visible(fn () => $r::canCreate()),
+            Actions\ActionGroup::make([
+                Actions\Action::make('exportPdf')->label(__('Download PDF'))->icon('heroicon-o-document-arrow-down')
+                    ->action(fn () => $this->downloadList('pdf')),
+                Actions\Action::make('exportExcel')->label(__('Export to Excel'))->icon('heroicon-o-table-cells')
+                    ->action(fn () => $this->downloadList('xlsx')),
+            ])->label(__('Export'))->icon('heroicon-o-arrow-down-tray')->button()->color('gray'),
         ];
+    }
+
+    /** Exports exactly what the list shows: the active tab, filters, search and sort. */
+    public function downloadList(string $format)
+    {
+        $r = static::getResource();
+        $company = \Filament\Facades\Filament::getTenant();
+        $invoices = $this->getFilteredSortedTableQuery()->with('party')->get();
+        $tab = $this->activeTab ? ($this->getTabs()[$this->activeTab] ?? null)?->getLabel() : null;
+        $title = $r::getPluralModelLabel().($tab && $this->activeTab !== 'all' ? ' — '.$tab : '');
+        $dates = $invoices->pluck('date')->filter();
+        $subtitle = $dates->isEmpty() ? '' : $dates->min()->format('Y-m-d').' → '.$dates->max()->format('Y-m-d');
+        [$headers, $rows] = \App\Services\Documents\InvoiceExport::listRows($invoices, fn ($k) => $r::kindLabel($k), $r::statusLabels(),
+            $r::side() === 'sale' ? __('Customer') : __('Supplier'));
+        $svc = \App\Services\Documents\InvoiceExport::class;
+        $bytes = $format === 'pdf' ? $svc::listPdf($company, $title, $subtitle, $headers, $rows) : $svc::listExcel($company, $title, $subtitle, $headers, $rows);
+        $file = ($r::side() === 'sale' ? 'sales-invoices' : 'purchase-bills').'-'.now()->format('Y-m-d').'.'.$format;
+
+        return response()->streamDownload(fn () => print ($bytes), $file, ['Content-Type' => $format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     public function getTabs(): array

@@ -819,5 +819,6 @@
     "Received cheques due": "شيكات مستحقة الصرف",
     ":n cheques due for collection": ":n شيك مستحق التحصيل",
     "Issued cheques due": "شيكات مستحقة الدفع",
-    ":n cheques due for payment": ":n شيك مستحق الدفع"
+    ":n cheques due for payment": ":n شيك مستحق الدفع",
+    "Export": "تصدير"
 }
