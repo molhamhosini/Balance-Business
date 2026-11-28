@@ -460,7 +460,10 @@ abstract class InvoiceResource extends Resource
             $actions[] = Action::make('print_'.$lang)->label(__('Print').' — '.$name)->icon('heroicon-o-printer')
                 ->url(fn (Invoice $record) => route('invoice.print', [$record, 'lang' => $lang]))->openUrlInNewTab();
             $actions[] = Action::make('pdf_'.$lang)->label(__('Download PDF').' — '.$name)->icon('heroicon-o-document-arrow-down')
-                ->url(fn (Invoice $record) => route('invoice.pdf', [$record, 'lang' => $lang]));
+                // a Livewire download: a plain link would be opened with SPA navigation and fail on a PDF
+                ->action(fn (Invoice $record) => response()->streamDownload(
+                    fn () => print (\App\Services\Documents\InvoiceExport::invoicePdf($record, $lang)),
+                    \App\Services\Documents\InvoiceExport::fileName($record, 'pdf', $lang), ['Content-Type' => 'application/pdf']));
         }
 
         return \Filament\Actions\ActionGroup::make($actions)->label(__('Print'))->icon('heroicon-o-printer')->button()->color('gray');

@@ -167,6 +167,10 @@ class ScreensTest extends AccountingTestCase
         $this->get(route('invoice.pdf', [$inv, 'lang' => 'en']))->assertOk()->assertHeader('Content-Type', 'application/pdf')
             ->assertHeader('Content-Disposition', 'attachment; filename="'.\App\Services\Documents\InvoiceExport::fileName($inv, 'pdf', 'en').'"');
         $this->get(route('invoice.pdf', $inv))->assertOk();
+        foreach (['ar' => '', 'en' => '-en'] as $lang => $suffix) { // the buttons download through Livewire (SPA links can't open a PDF)
+            \Livewire\Livewire::test(Resources\SalesInvoiceResource\Pages\ViewInvoice::class, ['record' => $inv->getRouteKey()])
+                ->callAction('pdf_'.$lang)->assertFileDownloaded(str_replace('/', '-', $inv->number).$suffix.'.pdf');
+        }
         $en = $this->get(route('invoice.print', [$inv, 'lang' => 'en']))->assertOk()->assertSee('dir="ltr"', false)->assertSee('Tax Invoice')->assertSee('Bill to');
         $this->assertStringNotContainsString('العميل', $en->getContent(), 'English print has no Arabic labels');
         $ar = $this->get(route('invoice.print', $inv))->assertOk()->assertSee('dir="rtl"', false)->assertSee('فاتورة ضريبية');
