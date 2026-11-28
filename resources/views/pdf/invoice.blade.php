@@ -11,16 +11,17 @@ body{font-family:dejavusans;color:#111;font-size:9.5pt}
 table{width:100%;border-collapse:collapse}
 .head td{vertical-align:top;border:0;padding:0}
 h1{margin:0;font-size:14pt}
-.title{font-size:15pt;color:#0f766e;font-weight:bold;text-align:center}
+.title{font-size:15pt;color:#fff;background:#0f766e;padding:6px;font-weight:bold;text-align:center}
 .stamp{color:#e11d48;font-weight:bold;font-size:12pt;text-align:center}
 .rule{border-bottom:2px solid #0f766e;margin:8px 0 10px}
 .box{border:0.5px solid #cbd5e1;padding:6px 8px;vertical-align:top}
 .box h3{margin:0 0 4px;font-size:9.5pt;color:#475569}
-.lines th{background:#e6f2f1;border:0.5px solid #cbd5e1;padding:5px;text-align:right;font-weight:bold}
+.lines th{background:#0f766e;color:#fff;border:0.5px solid #0f766e;padding:6px;text-align:right;font-weight:bold}
 .lines td{border:0.5px solid #cbd5e1;padding:5px;text-align:right}
 .n{text-align:left !important;white-space:nowrap}
 .tot td{border:0.5px solid #cbd5e1;padding:5px}
 .tot td.l{background:#f1f5f9;font-weight:bold}
+.tot tr.g td{background:#0f766e;color:#fff;font-weight:bold;font-size:11pt}
 .foot{margin-top:18px;font-size:8pt;color:#64748b;text-align:center}
 .muted{color:#475569}
 </style></head>
@@ -73,7 +74,7 @@ h1{margin:0;font-size:14pt}
 <table class="tot" style="width:55%;margin-top:10px;margin-right:auto;margin-left:0">
   <tr><td class="l">الإجمالي قبل الضريبة / Total excl. VAT</td><td class="n">{{ $m($inv->subtotal) }}</td></tr>
   <tr><td class="l">ضريبة القيمة المضافة / VAT</td><td class="n">{{ $m($inv->tax_total) }}</td></tr>
-  <tr><td class="l">الإجمالي شامل الضريبة / Total ({{ $inv->currency }})</td><td class="n"><b>{{ $m($inv->total) }}</b></td></tr>
+  <tr class="g"><td class="l">الإجمالي شامل الضريبة / Total ({{ $inv->currency }})</td><td class="n"><b>{{ $m($inv->total) }}</b></td></tr>
 </table>
 @if($inv->lines->contains(fn ($l) => $l->taxCode?->type === 'reverse_charge'))<p><b>Reverse charge applies — الاحتساب العكسي مطبق</b></p>@endif
 @if($c->invoice_footer)<div style="margin-top:16px;border-top:0.5px solid #cbd5e1;padding-top:8px">{!! nl2br(e($c->invoice_footer)) !!}</div>@endif
