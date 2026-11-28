@@ -141,6 +141,34 @@ class ScreensTest extends AccountingTestCase
         $this->get(Pages\TrialBalance::getUrl(['tenant' => $this->company]))->assertOk()->assertSee('storage/logos/l.png');
     }
 
+    public function test_invoice_lists_and_single_invoices_download_as_pdf_and_excel(): void
+    {
+        $this->postedOpening();
+        $customer = app(\App\Services\Accounting\PartyService::class)->create($this->company, ['type' => 'customer', 'name_ar' => 'فندق', 'payment_terms_days' => 30], $this->chief);
+        $svc = app(\App\Services\Accounting\InvoiceService::class);
+        $line = [['account_id' => $this->acc('4111'), 'description' => 'لحم غنم', 'quantity' => 2, 'unit_price' => 100, 'tax_code_id' => $this->tax('SR')]];
+        $new = fn ($kind = 'sale') => new \App\Models\Invoice(['company_id' => $this->company->id, 'branch_id' => $this->company->branches()->orderBy('id')->first()->id, 'kind' => $kind, 'payment' => 'credit', 'party_id' => $customer->id, 'date' => '2026-11-05']);
+        $inv = $svc->post($svc->saveDraft($new(), $line, $this->entry), $this->accountant);
+        $svc->saveDraft($new(), $line, $this->entry);
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+
+        $lw = \Livewire\Livewire::test(Resources\SalesInvoiceResource\Pages\ListInvoices::class);
+        $lw->callAction('exportPdf')->assertFileDownloaded();
+        $lw->callAction('exportExcel')->assertFileDownloaded();
+        [$h, $rows] = \App\Services\Documents\InvoiceExport::listRows(\App\Models\Invoice::where('kind', 'sale')->get(), fn ($k) => $k, [], 'x');
+        $this->assertSame(21000, end($rows)[7], 'totals row counts the posted invoice only (200 + 5% VAT)');
+        $this->assertCount(3, $rows);
+
+        $xlsx = \App\Services\Documents\InvoiceExport::listExcel($this->company, 'T', '', $h, $rows);
+        $this->assertStringStartsWith('PK', $xlsx);
+        $pdf = \App\Services\Documents\InvoiceExport::invoicePdf($inv);
+        $this->assertStringStartsWith('%PDF', $pdf);
+        \Livewire\Livewire::test(Resources\SalesInvoiceResource\Pages\ViewInvoice::class, ['record' => $inv->getRouteKey()])
+            ->callAction('downloadPdf')->assertFileDownloaded(\App\Services\Documents\InvoiceExport::fileName($inv));
+        \Livewire\Livewire::test(Resources\PurchaseInvoiceResource\Pages\ListInvoices::class)->callAction('exportPdf')->assertFileDownloaded();
+    }
+
     public function test_every_list_tab_can_be_opened(): void
     {
         $this->actingAs($this->chief);

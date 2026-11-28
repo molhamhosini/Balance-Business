@@ -26,8 +26,8 @@ class InvoiceMail extends Mailable
 
     public function attachments(): array
     {
-        $html = view('print.invoice', ['inv' => $this->inv->load(['company', 'branch', 'party', 'lines.taxCode', 'original'])])->render();
+        $pdf = \App\Services\Documents\InvoiceExport::invoicePdf($this->inv);
 
-        return [Attachment::fromData(fn () => $html, $this->inv->number.'.html')->withMime('text/html')];
+        return [Attachment::fromData(fn () => $pdf, \App\Services\Documents\InvoiceExport::fileName($this->inv))->withMime('application/pdf')];
     }
 }
