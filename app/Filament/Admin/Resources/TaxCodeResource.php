@@ -48,7 +48,7 @@ class TaxCodeResource extends Resource
     {
         return $table->columns([
             Tables\Columns\TextColumn::make('code')->label(__('Code'))->weight('bold'),
-            Tables\Columns\TextColumn::make('name_ar')->label(__('Name')),
+            Tables\Columns\TextColumn::make('name_ar')->formatStateUsing(\App\Support\Localized::name())->label(__('Name')),
             Tables\Columns\TextColumn::make('type')->label(__('Treatment'))->formatStateUsing(fn ($state) => __(TaxCode::TYPES[$state] ?? $state)),
             Tables\Columns\TextColumn::make('rate')->label(__('Rate %')),
             Tables\Columns\TextColumn::make('outputAccount.code')->label(__('Output VAT account')),

@@ -143,7 +143,7 @@ class JournalEntryResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('display_number')->label(__('Number'))->searchable(['number'])->weight('bold'),
                 Tables\Columns\TextColumn::make('date')->label(__('Date'))->date('Y-m-d')->sortable(),
-                Tables\Columns\TextColumn::make('branch.name_ar')->label(__('Branch'))->toggleable(),
+                Tables\Columns\TextColumn::make('branch.name_ar')->formatStateUsing(\App\Support\Localized::name('branch'))->label(__('Branch'))->toggleable(),
                 Tables\Columns\TextColumn::make('description')->label(__('Description'))->limit(45)->searchable()->wrap(),
                 Tables\Columns\TextColumn::make('type')->label(__('Type'))->badge()->color('gray')->formatStateUsing(fn ($state) => __(JournalEntry::TYPES[$state] ?? $state)),
                 Tables\Columns\TextColumn::make('total')->label(__('Amount'))->numeric(2, locale: 'en')->alignEnd()->sortable()

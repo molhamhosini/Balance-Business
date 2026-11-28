@@ -320,7 +320,7 @@ abstract class InvoiceResource extends Resource
                     ->description(fn (Invoice $record) => $record->supplier_invoice_number),
                 Tables\Columns\TextColumn::make('kind')->label(__('Type'))->badge()->formatStateUsing(fn ($state) => match (true) { $state === 'quotation' => __('Quotation'), $state === 'purchase_order' => __('Purchase order'), $state === 'sale_return' => __('Credit note'), $state === 'purchase_return' => __('Debit note'), default => __('Invoice') })
                     ->color(fn ($state) => in_array($state, Invoice::OFFER_KINDS, true) ? 'gray' : (str_ends_with($state, '_return') ? 'warning' : 'info')),
-                Tables\Columns\TextColumn::make('party.name_ar')->label($sale ? __('Customer') : __('Supplier'))->searchable(),
+                Tables\Columns\TextColumn::make('party.name_ar')->formatStateUsing(\App\Support\Localized::name('party'))->label($sale ? __('Customer') : __('Supplier'))->searchable(),
                 Tables\Columns\TextColumn::make('date')->label(__('Date'))->date('Y-m-d')->sortable(),
                 Tables\Columns\TextColumn::make('due_date')->label(__('Due date'))->date('Y-m-d')->sortable()->toggleable()
                     ->color(fn (Invoice $record) => $record->due_date?->isPast() && $record->openCents() > 0 ? 'danger' : null),

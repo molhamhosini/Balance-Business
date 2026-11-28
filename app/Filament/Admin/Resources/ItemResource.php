@@ -125,7 +125,7 @@ class ItemResource extends Resource
     {
         return $table->defaultSort('code')->columns([
             Tables\Columns\TextColumn::make('code')->label(__('Code'))->weight('bold')->searchable()->sortable(),
-            Tables\Columns\TextColumn::make('name_ar')->label(__('Name'))->searchable(['name_ar', 'name_en', 'barcode'])->description(fn (Item $r) => $r->barcode),
+            Tables\Columns\TextColumn::make('name_ar')->formatStateUsing(\App\Support\Localized::name())->label(__('Name'))->searchable(['name_ar', 'name_en', 'barcode'])->description(fn (Item $r) => $r->barcode),
             Tables\Columns\TextColumn::make('type')->label(__('Type'))->badge()->formatStateUsing(fn ($state) => __(Item::TYPES[$state]))->color(fn ($state) => $state === 'stock' ? 'info' : 'gray'),
             Tables\Columns\TextColumn::make('unit')->label(__('Unit')),
             Tables\Columns\TextColumn::make('sale_price')->label(__('Sale price'))->numeric(2, locale: 'en')->alignEnd(),

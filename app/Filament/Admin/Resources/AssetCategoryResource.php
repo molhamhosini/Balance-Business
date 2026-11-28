@@ -45,7 +45,7 @@ class AssetCategoryResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            Tables\Columns\TextColumn::make('name_ar')->label(__('Name'))->weight('bold'),
+            Tables\Columns\TextColumn::make('name_ar')->formatStateUsing(\App\Support\Localized::name())->label(__('Name'))->weight('bold'),
             Tables\Columns\TextColumn::make('useful_life_months')->label(__('Useful life (months)')),
             Tables\Columns\TextColumn::make('assetAccount.label')->label(__('Asset account')),
             Tables\Columns\TextColumn::make('accumulatedAccount.label')->label(__('Accumulated depreciation account'))->toggleable(),

@@ -95,9 +95,10 @@ class AccountResource extends Resource
                 Tables\Columns\TextColumn::make('code')->label(__('Code'))->searchable()->sortable()
                     ->formatStateUsing(fn ($state, Account $r) => str_repeat('    ', $r->level - 1).$state)
                     ->weight(fn (Account $r) => $r->is_postable ? 'normal' : 'bold')->extraAttributes(['style' => 'white-space:pre']),
-                Tables\Columns\TextColumn::make('name_ar')->label(__('Name'))->searchable(['name_ar', 'name_en'])
+                Tables\Columns\TextColumn::make('name_ar')->formatStateUsing(\App\Support\Localized::name())->label(__('Name'))->searchable(['name_ar', 'name_en'])
                     ->weight(fn (Account $r) => $r->is_postable ? 'normal' : 'bold'),
-                Tables\Columns\TextColumn::make('name_en')->label(__('English name'))->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('name_en')->label(fn () => app()->getLocale() === 'en' ? __('Arabic name') : __('English name'))
+                    ->state(fn (Account $r) => app()->getLocale() === 'en' ? $r->name_ar : $r->name_en)->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('class')->label(__('Class'))->badge()->color('gray')->formatStateUsing(fn ($state) => __(Account::CLASSES[$state] ?? $state))->toggleable(),
                 Tables\Columns\TextColumn::make('nature')->label(__('Normal balance'))->formatStateUsing(fn ($state) => $state === 'debit' ? __('Debit') : __('Credit'))->toggleable(),
                 Tables\Columns\TextColumn::make('balance')->label(__('Balance'))->alignEnd()

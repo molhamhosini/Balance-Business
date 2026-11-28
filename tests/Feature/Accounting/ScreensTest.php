@@ -178,6 +178,17 @@ class ScreensTest extends AccountingTestCase
         \Livewire\Livewire::test(Resources\PurchaseInvoiceResource\Pages\ListInvoices::class)->callAction('exportPdf')->assertFileDownloaded();
     }
 
+    public function test_lists_show_english_names_in_english(): void
+    {
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+        \App\Models\Account::where('company_id', $this->company->id)->where('code', '1111')->update(['name_ar' => 'الصندوق الرئيسي', 'name_en' => 'Main Cash Box']);
+        app()->setLocale('en');
+        \Livewire\Livewire::test(Resources\AccountResource\Pages\ListAccounts::class)->assertSee('Main Cash Box')->assertDontSee('الصندوق الرئيسي');
+        app()->setLocale('ar');
+        \Livewire\Livewire::test(Resources\AccountResource\Pages\ListAccounts::class)->assertSee('الصندوق الرئيسي');
+    }
+
     public function test_every_list_tab_can_be_opened(): void
     {
         $this->actingAs($this->chief);

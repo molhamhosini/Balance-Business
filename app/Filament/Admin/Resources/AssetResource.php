@@ -120,8 +120,8 @@ class AssetResource extends Resource
     {
         return $table->defaultSort('code')->columns([
             Tables\Columns\TextColumn::make('code')->label(__('Code'))->weight('bold')->searchable()->sortable(),
-            Tables\Columns\TextColumn::make('name_ar')->label(__('Name'))->searchable(['name_ar', 'name_en', 'serial']),
-            Tables\Columns\TextColumn::make('category.name_ar')->label(__('Category')),
+            Tables\Columns\TextColumn::make('name_ar')->formatStateUsing(\App\Support\Localized::name())->label(__('Name'))->searchable(['name_ar', 'name_en', 'serial']),
+            Tables\Columns\TextColumn::make('category.name_ar')->formatStateUsing(\App\Support\Localized::name('category'))->label(__('Category')),
             Tables\Columns\TextColumn::make('purchase_date')->label(__('Purchase date'))->date('Y-m-d')->sortable(),
             Tables\Columns\TextColumn::make('cost')->label(__('Cost'))->numeric(2, locale: 'en')->alignEnd(),
             Tables\Columns\TextColumn::make('nbv')->label(__('Net book value'))->state(fn (Asset $record) => Money::format($record->bookValueCents()))->alignEnd(),

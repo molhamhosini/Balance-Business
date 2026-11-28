@@ -62,7 +62,7 @@ class UserResource extends Resource
             Tables\Columns\TextColumn::make('name')->label(__('Name'))->searchable()->weight('bold'),
             Tables\Columns\TextColumn::make('email')->label(__('Email'))->searchable(),
             Tables\Columns\TextColumn::make('roles.name')->label(__('Roles'))->badge()->formatStateUsing(fn ($state) => __(Perm::ROLES[$state]['label'] ?? $state)),
-            Tables\Columns\TextColumn::make('branches.name_ar')->label(__('Branches'))->badge()->color('gray')->placeholder(__('All')),
+            Tables\Columns\TextColumn::make('branches.name_ar')->formatStateUsing(\App\Support\Localized::name('branches'))->label(__('Branches'))->badge()->color('gray')->placeholder(__('All')),
             Tables\Columns\IconColumn::make('is_active')->label(__('Active'))->boolean(),
         ])->actions([Tables\Actions\EditAction::make()]);
     }

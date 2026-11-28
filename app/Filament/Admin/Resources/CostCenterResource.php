@@ -48,8 +48,8 @@ class CostCenterResource extends Resource
     {
         return $table->defaultSort('code')->columns([
             Tables\Columns\TextColumn::make('code')->label(__('Code'))->weight('bold')->searchable(),
-            Tables\Columns\TextColumn::make('name_ar')->label(__('Name'))->searchable(['name_ar', 'name_en']),
-            Tables\Columns\TextColumn::make('parent.name_ar')->label(__('Parent'))->placeholder('—'),
+            Tables\Columns\TextColumn::make('name_ar')->formatStateUsing(\App\Support\Localized::name())->label(__('Name'))->searchable(['name_ar', 'name_en']),
+            Tables\Columns\TextColumn::make('parent.name_ar')->formatStateUsing(\App\Support\Localized::name('parent'))->label(__('Parent'))->placeholder('—'),
             Tables\Columns\IconColumn::make('is_active')->label(__('Active'))->boolean(),
         ])->actions([
             Tables\Actions\Action::make('report')->label(__('Profitability'))->icon('heroicon-o-chart-bar')->iconButton()->url(fn () => CostCenterReport::getUrl()),
