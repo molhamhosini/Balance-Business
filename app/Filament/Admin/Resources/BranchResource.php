@@ -46,7 +46,7 @@ class BranchResource extends Resource
     {
         return $table->columns([
             Tables\Columns\TextColumn::make('code')->label(__('Code')),
-            Tables\Columns\TextColumn::make('name_ar')->label(__('Name')),
+            Tables\Columns\TextColumn::make('name_ar')->formatStateUsing(\App\Support\Localized::name())->label(__('Name')),
             Tables\Columns\TextColumn::make('emirate')->label(__('Emirate'))->formatStateUsing(fn ($state) => Branch::EMIRATES[$state] ?? $state),
             Tables\Columns\TextColumn::make('activity')->label(__('Activity')),
             Tables\Columns\IconColumn::make('is_active')->label(__('Active'))->boolean(),

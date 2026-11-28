@@ -200,8 +200,8 @@ class VoucherResource extends Resource
                     ->color(fn ($state) => $state === 'receipt' ? 'success' : 'danger'),
                 Tables\Columns\TextColumn::make('date')->label(__('Date'))->date('Y-m-d')->sortable(),
                 Tables\Columns\TextColumn::make('party_name')->label(__('Party'))->searchable(),
-                Tables\Columns\TextColumn::make('counterAccount.name_ar')->label(__('Account'))->toggleable(),
-                Tables\Columns\TextColumn::make('cashAccount.name_ar')->label(__('Cash / bank'))->toggleable(),
+                Tables\Columns\TextColumn::make('counterAccount.name_ar')->formatStateUsing(\App\Support\Localized::name('counterAccount'))->label(__('Account'))->toggleable(),
+                Tables\Columns\TextColumn::make('cashAccount.name_ar')->formatStateUsing(\App\Support\Localized::name('cashAccount'))->label(__('Cash / bank'))->toggleable(),
                 Tables\Columns\TextColumn::make('total')->label(__('Total'))->numeric(2, locale: 'en')->alignEnd()->sortable(),
                 Tables\Columns\TextColumn::make('status')->label(__('Status'))->badge()->formatStateUsing(fn ($state) => __(Voucher::STATUSES[$state]))
                     ->color(fn ($state) => match ($state) { 'posted' => 'success', 'cancelled' => 'danger', default => 'gray' }),

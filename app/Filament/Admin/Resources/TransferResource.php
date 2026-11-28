@@ -81,8 +81,8 @@ class TransferResource extends Resource
         return $table->defaultSort('date', 'desc')->columns([
             Tables\Columns\TextColumn::make('display_number')->label(__('Number'))->searchable(['number'])->weight('bold'),
             Tables\Columns\TextColumn::make('date')->label(__('Date'))->date('Y-m-d')->sortable(),
-            Tables\Columns\TextColumn::make('fromAccount.name_ar')->label(__('From (cash / bank)')),
-            Tables\Columns\TextColumn::make('toAccount.name_ar')->label(__('To (cash / bank)')),
+            Tables\Columns\TextColumn::make('fromAccount.name_ar')->formatStateUsing(\App\Support\Localized::name('fromAccount'))->label(__('From (cash / bank)')),
+            Tables\Columns\TextColumn::make('toAccount.name_ar')->formatStateUsing(\App\Support\Localized::name('toAccount'))->label(__('To (cash / bank)')),
             Tables\Columns\TextColumn::make('amount')->label(__('Amount'))->numeric(2, locale: 'en')->alignEnd(),
             Tables\Columns\TextColumn::make('status')->label(__('Status'))->badge()->formatStateUsing(fn ($state) => __(Transfer::STATUSES[$state]))
                 ->color(fn ($state) => match ($state) { 'posted' => 'success', 'cancelled' => 'danger', default => 'gray' }),

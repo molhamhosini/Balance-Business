@@ -133,7 +133,7 @@ class StockDocumentResource extends Resource
             Tables\Columns\TextColumn::make('display_number')->label(__('Number'))->searchable(['number'])->weight('bold'),
             Tables\Columns\TextColumn::make('type')->label(__('Type'))->badge()->formatStateUsing(fn ($state) => __(StockDocument::TYPES[$state])),
             Tables\Columns\TextColumn::make('date')->label(__('Date'))->date('Y-m-d')->sortable(),
-            Tables\Columns\TextColumn::make('warehouse.name_ar')->label(__('Warehouse'))->placeholder('—'),
+            Tables\Columns\TextColumn::make('warehouse.name_ar')->formatStateUsing(\App\Support\Localized::name('warehouse'))->label(__('Warehouse'))->placeholder('—'),
             Tables\Columns\TextColumn::make('description')->label(__('Description'))->limit(40)->placeholder('—'),
             Tables\Columns\TextColumn::make('status')->label(__('Status'))->badge()->formatStateUsing(fn ($state) => __(StockDocument::STATUSES[$state]))
                 ->color(fn ($state) => match ($state) { 'posted' => 'success', 'cancelled' => 'danger', default => 'gray' }),

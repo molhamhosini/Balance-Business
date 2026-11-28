@@ -31,7 +31,7 @@ class BankStatementResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->defaultSort('date_to', 'desc')->columns([
-            Tables\Columns\TextColumn::make('account.name_ar')->label(__('Bank account'))->weight('bold'),
+            Tables\Columns\TextColumn::make('account.name_ar')->formatStateUsing(\App\Support\Localized::name('account'))->label(__('Bank account'))->weight('bold'),
             Tables\Columns\TextColumn::make('date_from')->label(__('From'))->date('Y-m-d'),
             Tables\Columns\TextColumn::make('date_to')->label(__('To'))->date('Y-m-d')->sortable(),
             Tables\Columns\TextColumn::make('closing_balance')->label(__('Statement closing balance'))->numeric(2, locale: 'en')->alignEnd(),

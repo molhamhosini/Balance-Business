@@ -46,8 +46,8 @@ class WarehouseResource extends Resource
     {
         return $table->columns([
             Tables\Columns\TextColumn::make('code')->label(__('Code'))->weight('bold'),
-            Tables\Columns\TextColumn::make('name_ar')->label(__('Name')),
-            Tables\Columns\TextColumn::make('branch.name_ar')->label(__('Branch'))->placeholder('—'),
+            Tables\Columns\TextColumn::make('name_ar')->formatStateUsing(\App\Support\Localized::name())->label(__('Name')),
+            Tables\Columns\TextColumn::make('branch.name_ar')->formatStateUsing(\App\Support\Localized::name('branch'))->label(__('Branch'))->placeholder('—'),
             Tables\Columns\IconColumn::make('is_active')->label(__('Active'))->boolean(),
         ])->actions([Tables\Actions\EditAction::make()->iconButton()]);
     }

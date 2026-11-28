@@ -113,7 +113,7 @@ abstract class PartyResource extends Resource
         return $table->defaultSort('code')
             ->columns([
                 Tables\Columns\TextColumn::make('code')->label(__('Code'))->searchable()->sortable()->weight('bold'),
-                Tables\Columns\TextColumn::make('name_ar')->label(__('Name'))->searchable(['name_ar', 'name_en'])->description(fn (Party $record) => $record->name_en),
+                Tables\Columns\TextColumn::make('name_ar')->formatStateUsing(\App\Support\Localized::name())->label(__('Name'))->searchable(['name_ar', 'name_en'])->description(fn (Party $record) => $record->name_en),
                 Tables\Columns\TextColumn::make('trn')->label(__('TRN'))->searchable()->toggleable()->placeholder('—'),
                 Tables\Columns\TextColumn::make('taxCode.code')->label(__('Tax'))->badge()->color('gray')->toggleable(),
                 Tables\Columns\TextColumn::make('phone')->label(__('Phone'))->toggleable()->placeholder('—'),
