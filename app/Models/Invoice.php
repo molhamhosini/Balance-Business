@@ -17,9 +17,13 @@ class Invoice extends Model
         'purchase' => 'فاتورة شراء',
         'purchase_return' => 'إشعار مدين / مرتجع مشتريات',
         'quotation' => 'عرض سعر',
+        'purchase_order' => 'طلب شراء',
     ];
 
-    public const PREFIX = ['sale' => 'INV', 'sale_return' => 'CN', 'purchase' => 'BILL', 'purchase_return' => 'DN', 'quotation' => 'QT'];
+    /** Documents that never post: sales quotation and purchase order. They convert into a draft invoice / bill. */
+    public const OFFER_KINDS = ['quotation', 'purchase_order'];
+
+    public const PREFIX = ['sale' => 'INV', 'sale_return' => 'CN', 'purchase' => 'BILL', 'purchase_return' => 'DN', 'quotation' => 'QT', 'purchase_order' => 'PO'];
 
     public const STATUSES = ['draft' => 'مسودة', 'posted' => 'مرحّل', 'cancelled' => 'ملغى', 'sent' => 'مُرسَل', 'converted' => 'محوّل إلى فاتورة'];
 
@@ -41,7 +45,7 @@ class Invoice extends Model
     {
         static::creating(fn (Invoice $i) => $i->uuid ??= (string) Str::uuid());
         static::updating(function (Invoice $i) {
-            $open = $i->kind === 'quotation' ? ['draft', 'sent'] : ['draft'];
+            $open = $i->isQuotation() ? ['draft', 'sent'] : ['draft'];
             if (! in_array($i->getOriginal('status') ?? 'draft', $open, true) && array_diff(array_keys($i->getDirty()), self::MUTABLE_AFTER_POST)) {
                 throw new AccountingException(__('A posted invoice cannot be modified. Issue a credit note instead.'));
             }
@@ -69,7 +73,11 @@ class Invoice extends Model
     public function poster(): BelongsTo { return $this->belongsTo(User::class, 'posted_by'); }
 
     public function isSale(): bool { return in_array($this->kind, ['sale', 'sale_return', 'quotation'], true); }
-    public function isQuotation(): bool { return $this->kind === 'quotation'; }
+    public function isQuotation(): bool { return in_array($this->kind, self::OFFER_KINDS, true); }
+    public function isPurchaseOrder(): bool { return $this->kind === 'purchase_order'; }
+
+    /** The invoice kind an offer document converts into. */
+    public function convertsTo(): string { return $this->kind === 'purchase_order' ? 'purchase' : 'sale'; }
 
     /** Can go to the customer by email / WhatsApp: a posted sales document, or a quotation. */
     public function isSendable(): bool

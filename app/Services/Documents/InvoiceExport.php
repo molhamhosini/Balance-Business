@@ -57,7 +57,7 @@ class InvoiceExport
         foreach ($invoices as $inv) {
             $sign = str_ends_with($inv->kind, '_return') ? -1 : 1;
             $vals = [Money::toCents($inv->subtotal), Money::toCents($inv->tax_total), Money::toCents($inv->total), $inv->openCents()];
-            if (! in_array($inv->status, ['draft', 'cancelled'], true) && $inv->kind !== 'quotation') {
+            if (! in_array($inv->status, ['draft', 'cancelled'], true) && ! $inv->isQuotation()) {
                 foreach ($vals as $i => $v) {
                     $t[$i] += $sign * $v;
                 }

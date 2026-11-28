@@ -81,7 +81,7 @@ abstract class PartyResource extends Resource
                 $open = $record->invoices()->where('status', 'posted')->get()->filter(fn ($i) => $i->openCents() > 0)->count();
 
                 return [
-                    ['icon' => 'heroicon-o-document-text', 'label' => __('Invoices'), 'value' => $record->invoices()->where('status', '!=', 'cancelled')->where('kind', '!=', 'quotation')->count(), 'url' => $inv::getUrl('index', ['tableFilters' => ['party_id' => ['value' => $record->id]]])],
+                    ['icon' => 'heroicon-o-document-text', 'label' => __('Invoices'), 'value' => $record->invoices()->where('status', '!=', 'cancelled')->whereNotIn('kind', \App\Models\Invoice::OFFER_KINDS)->count(), 'url' => $inv::getUrl('index', ['tableFilters' => ['party_id' => ['value' => $record->id]]])],
                     ['icon' => 'heroicon-o-clock', 'label' => __('Open invoices'), 'value' => $open, 'url' => $inv::getUrl('index', ['tableFilters' => ['party_id' => ['value' => $record->id]], 'activeTab' => 'open'])],
                     ['icon' => 'heroicon-o-scale', 'label' => __('Balance'), 'value' => Money::format(abs($record->balance())), 'url' => PartyStatement::getUrl(['party' => $record->id])],
                     ['icon' => 'heroicon-o-chart-bar', 'label' => __('Aging'), 'value' => '', 'url' => Aging::getUrl(['type' => $record->type])],

@@ -15,8 +15,8 @@ abstract class ListInvoices extends ListRecords
         $side = $r::side();
 
         return [
-            Actions\Action::make('newQuotation')->label(__('New quotation'))->icon('heroicon-o-document-duplicate')->color('gray')
-                ->url(fn () => $r::getUrl('create', ['kind' => 'quotation']))->visible(fn () => $side === 'sale' && $r::canCreate()),
+            Actions\Action::make('newQuotation')->label($side === 'sale' ? __('New quotation') : __('New purchase order'))->icon('heroicon-o-document-duplicate')->color('gray')
+                ->url(fn () => $r::getUrl('create', ['kind' => $r::offerKind()]))->visible(fn () => $r::canCreate()),
             Actions\Action::make('new')->label($side === 'sale' ? __('New invoice') : __('New bill'))->icon('heroicon-o-plus')
                 ->url(fn () => $r::getUrl('create', ['kind' => $side]))->visible(fn () => $r::canCreate()),
             Actions\Action::make('newReturn')->label($side === 'sale' ? __('New credit note') : __('New debit note'))->icon('heroicon-o-receipt-refund')->color('warning')
@@ -56,8 +56,9 @@ abstract class ListInvoices extends ListRecords
         $open = fn (Builder $q) => $q->where('status', 'posted')->where('payment', 'credit')
             ->whereRaw('total > (select coalesce(sum(a.amount),0) from allocations a where a.invoice_id = invoices.id)');
 
-        $quotations = $side === 'sale' ? ['quotations' => Tab::make(__('Quotations'))->modifyQueryUsing(fn (Builder $query) => $query->where('kind', 'quotation'))
-            ->badge(fn () => $r::getEloquentQuery()->where('kind', 'quotation')->whereIn('status', ['draft', 'sent'])->count() ?: null)] : [];
+        $offer = $r::offerKind();
+        $quotations = ['quotations' => Tab::make($side === 'sale' ? __('Quotations') : __('Purchase orders'))->modifyQueryUsing(fn (Builder $query) => $query->where('kind', $offer))
+            ->badge(fn () => $r::getEloquentQuery()->where('kind', $offer)->whereIn('status', ['draft', 'sent'])->count() ?: null)];
 
         return [
             'all' => Tab::make(__('All')),
