@@ -141,6 +141,24 @@ class ScreensTest extends AccountingTestCase
         $this->get(Pages\TrialBalance::getUrl(['tenant' => $this->company]))->assertOk()->assertSee('storage/logos/l.png');
     }
 
+    public function test_every_list_tab_can_be_opened(): void
+    {
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+        $pages = collect(glob(app_path('Filament/Admin/Resources/*/Pages/List*.php')))
+            ->map(fn ($f) => 'App\\Filament\\Admin\\Resources\\'.basename(dirname($f, 2)).'\\Pages\\'.basename($f, '.php'))
+            ->filter(fn ($c) => class_exists($c) && method_exists($c, 'getTabs'));
+        $checked = 0;
+        foreach ($pages as $page) {
+            $lw = \Livewire\Livewire::test($page);
+            foreach (array_keys($lw->instance()->getTabs()) as $tab) {
+                $lw->set('activeTab', $tab)->assertOk();
+                $checked++;
+            }
+        }
+        $this->assertGreaterThan(15, $checked);
+    }
+
     public function test_every_report_exports_to_excel_and_pdf(): void
     {
         $this->actingAs($this->chief);

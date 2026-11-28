@@ -21,10 +21,10 @@ class ListJournalEntries extends ListRecords
     {
         return [
             'all' => Tab::make(__('All')),
-            'draft' => Tab::make(__('Drafts'))->modifyQueryUsing(fn (Builder $q) => $q->where('status', 'draft'))
+            'draft' => Tab::make(__('Drafts'))->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'draft'))
                 ->badge(fn () => JournalEntryResource::getEloquentQuery()->where('status', 'draft')->count() ?: null)->badgeColor('warning'),
-            'posted' => Tab::make(__('Posted'))->modifyQueryUsing(fn (Builder $q) => $q->where('status', 'posted')),
-            'reversed' => Tab::make(__('Reversed'))->modifyQueryUsing(fn (Builder $q) => $q->where('status', 'reversed')),
+            'posted' => Tab::make(__('Posted'))->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'posted')),
+            'reversed' => Tab::make(__('Reversed'))->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'reversed')),
         ];
     }
 }
