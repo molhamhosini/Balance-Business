@@ -835,5 +835,6 @@
     "Creates a draft purchase bill with the same lines. Review it, then confirm it.": "ينشئ فاتورة شراء مسودة بنفس البنود. راجعها ثم أكّدها.",
     "Purchase order :n": "طلب شراء :n",
     "View and print the purchase order": "عرض وطباعة طلب الشراء",
-    "Invoice language": "لغة الفاتورة"
+    "Invoice language": "لغة الفاتورة",
+    "Report language": "لغة التقرير"
 }
