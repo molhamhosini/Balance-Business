@@ -91,6 +91,14 @@ class DataImport extends Page implements HasForms
         $svc = app(DataImporter::class);
         try {
             $rows = $svc->readRows(Storage::disk('local')->path($d['file']), $d['type']);
+            try {
+                app(\App\Services\System\BackupService::class)->create('before-import', __('Before importing: :t', ['t' => __(DataImporter::TYPES[$d['type']] ?? $d['type'])]).' · '.Filament::getTenant()?->name);
+            } catch (\Throwable $e) {
+                report($e);
+                Notification::make()->danger()->title(__('Import stopped: the automatic backup could not be taken.'))->body($e->getMessage())->persistent()->send();
+
+                return;
+            }
             $this->result = $svc->import(Filament::getTenant(), $d['type'], $rows, auth()->user(), ['counter_account_id' => $d['counter_account_id'] ?? null, 'date' => $d['date'] ?? null, 'post' => (bool) ($d['post'] ?? true)]) + ['rows' => count($rows), 'type' => $d['type']];
             $n = Notification::make()->title(__('Import finished'))->body(__(':c added, :u updated', ['c' => $this->result['created'], 'u' => $this->result['updated']]));
             ($this->result['errors'] ? $n->warning() : $n->success())->send();
