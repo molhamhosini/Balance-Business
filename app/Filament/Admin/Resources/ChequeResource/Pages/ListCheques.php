@@ -27,6 +27,8 @@ class ListCheques extends ListRecords
     {
         return [
             'open' => Tab::make(__('Open'))->modifyQueryUsing(fn (Builder $query) => $query->whereIn('cheque_status', ['in_box', 'issued'])),
+            'due_received' => Tab::make(__('Received cheques due'))->modifyQueryUsing(fn (Builder $query) => \App\Filament\Admin\Widgets\DueTransactions::dueReceived($query)),
+            'due_issued' => Tab::make(__('Issued cheques due'))->modifyQueryUsing(fn (Builder $query) => \App\Filament\Admin\Widgets\DueTransactions::dueIssued($query)),
             'received' => Tab::make(__('Received'))->modifyQueryUsing(fn (Builder $query) => $query->where('type', 'receipt')),
             'issued' => Tab::make(__('Issued'))->modifyQueryUsing(fn (Builder $query) => $query->where('type', 'payment')),
             'all' => Tab::make(__('All')),

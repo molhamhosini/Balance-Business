@@ -36,10 +36,13 @@ class AccountingOverview extends StatsOverviewWidget
         $drafts = JournalEntry::where('company_id', $c->id)->where('status', 'draft')->count() + Voucher::where('company_id', $c->id)->where('status', 'draft')->count();
 
         return [
-            Stat::make(__('Cash & bank'), Money::format($liquid))->description(__('All cash boxes and banks today'))->icon('heroicon-o-banknotes'),
+            Stat::make(__('Cash & bank'), Money::format($liquid))->description(__('All cash boxes and banks today'))->icon('heroicon-o-banknotes')
+                ->url(\App\Filament\Admin\Pages\CashMovement::getUrl()),
             Stat::make(__('Revenue this month'), Money::format($is['totals']['revenue']))->description(__('Net profit').': '.Money::format($is['net']))
-                ->color($is['net'] >= 0 ? 'success' : 'danger')->icon('heroicon-o-arrow-trending-up'),
-            Stat::make(__('VAT due this quarter'), Money::format($vat['14']['vat']))->description(__('Output').' '.Money::format($vat['12']['vat']).' − '.__('Input').' '.Money::format($vat['13']['vat']))->icon('heroicon-o-receipt-percent'),
+                ->color($is['net'] >= 0 ? 'success' : 'danger')->icon('heroicon-o-arrow-trending-up')
+                ->url(\App\Filament\Admin\Pages\IncomeStatement::getUrl()),
+            Stat::make(__('VAT due this quarter'), Money::format($vat['14']['vat']))->description(__('Output').' '.Money::format($vat['12']['vat']).' − '.__('Input').' '.Money::format($vat['13']['vat']))->icon('heroicon-o-receipt-percent')
+                ->url(\App\Filament\Admin\Pages\VatReturn::getUrl()),
             Stat::make(__('Documents to post'), (string) $drafts)->description(__('Draft entries and vouchers'))->color($drafts ? 'warning' : 'success')
                 ->icon('heroicon-o-clock')->url(VoucherResource::getUrl('index', ['activeTab' => 'draft'])),
         ];

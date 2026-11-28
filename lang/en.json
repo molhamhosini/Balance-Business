@@ -249,5 +249,12 @@
     "Select all": "Select all",
     "Amount paid": "Amount paid",
     "Will settle": "Will settle",
-    "Choose the customer or supplier of the invoices.": "Choose the customer or supplier of the invoices."
+    "Choose the customer or supplier of the invoices.": "Choose the customer or supplier of the invoices.",
+    "Due transactions": "Due transactions",
+    "Customer balances due": "Customer balances due",
+    ":n overdue invoices · :c customers": ":n overdue invoices · :c customers",
+    "Received cheques due": "Received cheques due",
+    ":n cheques due for collection": ":n cheques due for collection",
+    "Issued cheques due": "Issued cheques due",
+    ":n cheques due for payment": ":n cheques due for payment"
 }
