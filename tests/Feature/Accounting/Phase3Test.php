@@ -146,6 +146,25 @@ class Phase3Test extends AccountingTestCase
         $this->assertSame(21000, $w->balances('supplier')['total']); // shown positive: we owe it
     }
 
+    public function test_dashboard_due_transactions(): void
+    {
+        $this->postedOpening();
+        $c = $this->party('customer');
+        $sale = $this->sale($c, [['account_id' => $this->acc('4111'), 'description' => 'x', 'quantity' => '1', 'unit_price' => '1000']], ['due_date' => now()->subDays(5)->toDateString()]);
+        $v = $this->invoices()->registerPayment($sale, ['date' => now()->toDateString(), 'cash_account_id' => $this->acc('1121'), 'amount' => '300', 'payment_method' => 'cheque', 'cheque_number' => '9'], $this->entry, $this->vouchers());
+        $v->forceFill(['cheque_due_date' => now()->subDay()->toDateString()])->saveQuietly();
+        $this->vouchers()->post($v->fresh(), $this->accountant);
+        $later = $this->vouchers()->post($this->voucher(['type' => 'payment', 'cash_account_id' => $this->acc('1121'), 'counter_account_id' => $this->acc('6220'), 'amount' => '200',
+            'payment_method' => 'cheque', 'cheque_number' => '10', 'cheque_due_date' => now()->addMonth()->toDateString()]), $this->accountant);
+        $this->assertSame('issued', $later->cheque_status);
+
+        $this->actingAs($this->chief);
+        \Filament\Facades\Filament::setTenant($this->company);
+        $stats = (fn () => $this->getStats())->call(new \App\Filament\Admin\Widgets\DueTransactions);
+        $this->assertSame(['750.00', '300.00', '0.00'], array_map(fn ($s) => (string) $s->getValue(), $stats), 'open 1,050 − 300; one received cheque due; the issued one is next month');
+        $this->get(\App\Filament\Admin\Resources\ChequeResource::getUrl('index', ['tenant' => $this->company, 'activeTab' => 'due_received']))->assertOk()->assertSee('9');
+    }
+
     public function test_send_invoice_by_email_and_whatsapp_with_signed_link(): void
     {
         \Illuminate\Support\Facades\Mail::fake();

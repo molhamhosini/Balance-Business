@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 /** Dashboard tabs: closing balance of every customer and every supplier (posted entries only). */
 class PartyBalances extends Widget
 {
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 3;
     protected static string $view = 'filament.widgets.party-balances';
     protected int|string|array $columnSpan = 'full';
 

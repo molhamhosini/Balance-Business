@@ -812,5 +812,12 @@
     "Select all": "تحديد الكل",
     "Amount paid": "المبلغ المسدد",
     "Will settle": "سيسدد",
-    "Choose the customer or supplier of the invoices.": "اختر العميل أو المورد صاحب الفواتير."
+    "Choose the customer or supplier of the invoices.": "اختر العميل أو المورد صاحب الفواتير.",
+    "Due transactions": "المعاملات المستحقة",
+    "Customer balances due": "أرصدة العملاء المستحقة",
+    ":n overdue invoices · :c customers": ":n فاتورة متأخرة · :c عميل",
+    "Received cheques due": "شيكات مستحقة الصرف",
+    ":n cheques due for collection": ":n شيك مستحق التحصيل",
+    "Issued cheques due": "شيكات مستحقة الدفع",
+    ":n cheques due for payment": ":n شيك مستحق الدفع"
 }
